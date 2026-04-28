@@ -1,4 +1,4 @@
-package com.example.traffic.smarttrafficsystem;
+package com.example.traffic;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;

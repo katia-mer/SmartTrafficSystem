@@ -3,6 +3,6 @@ module com.example.traffic.smarttrafficsystem {
     requires javafx.fxml;
 
 
-    opens com.example.traffic.smarttrafficsystem to javafx.fxml;
-    exports com.example.traffic.smarttrafficsystem;
+    opens com.example.traffic to javafx.fxml;
+    exports com.example.traffic;
 }
