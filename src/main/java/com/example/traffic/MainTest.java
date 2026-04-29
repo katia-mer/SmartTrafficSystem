@@ -14,6 +14,9 @@ public class MainTest {
 
         Edge e = new Edge(n1, n2, 50);
 
+        // créer intersection au point B avec un feu
+        Intersection intersectionB = new Intersection(n2);
+
         // créer véhicule
         Vehicle v = new Vehicle("V1", n1, 10);
         v.setCurrentEdge(e);
@@ -21,11 +24,16 @@ public class MainTest {
         // simulation
         SimulationEngine sim = new SimulationEngine();
         sim.addVehicle(v);
+        sim.addIntersection(intersectionB);
 
         // boucle simple
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 15; i++) {
             sim.update(1.0);
-            System.out.println(v);
+
+            System.out.println(
+                    "Feu B = " + intersectionB.getTrafficLight().getState()
+                            + " | " + v
+            );
         }
     }
 }
