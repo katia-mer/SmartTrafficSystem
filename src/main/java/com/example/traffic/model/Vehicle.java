@@ -17,10 +17,12 @@ public class Vehicle {
     // ── Position ──────────────────────────────────────────
     private Node currentNode;
     private Edge currentEdge;
+    private Edge initialEdge;
     private double progress; // entre 0 et 1
 
     // ── État ──────────────────────────────────────────────
     private boolean stopped;
+    private int preferredRouteIndex = 0; // 0 = tout droit, 1 = tourner à droite, etc.
 
     // ── Constructeur ──────────────────────────────────────
     public Vehicle(String id, Node startNode, double speed) {
@@ -69,6 +71,10 @@ public class Vehicle {
         return currentEdge;
     }
 
+    public Edge getInitialEdge() {
+        return initialEdge;
+    }
+
     public double getProgress() {
         return progress;
     }
@@ -84,6 +90,21 @@ public class Vehicle {
 
     public void setCurrentEdge(Edge currentEdge) {
         this.currentEdge = currentEdge;
+        if (this.initialEdge == null) {
+            this.initialEdge = currentEdge;
+        }
+    }
+
+    public void setInitialEdge(Edge initialEdge) {
+        this.initialEdge = initialEdge;
+    }
+
+    public int getPreferredRouteIndex() {
+        return preferredRouteIndex;
+    }
+
+    public void setPreferredRouteIndex(int preferredRouteIndex) {
+        this.preferredRouteIndex = preferredRouteIndex;
     }
 
     public void setProgress(double progress) {
