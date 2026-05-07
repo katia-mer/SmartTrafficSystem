@@ -1,11 +1,17 @@
 package com.example.traffic.ui.models;
 
 import com.example.traffic.model.Vehicle;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Box;
 import javafx.scene.transform.Rotate;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
- * Représentation 3D d'une voiture moderne.
+ * Représentation 3D d'une voiture (normale ou urgence).
+ * Supporte l'animation de sirène pour les véhicules d'urgence.
  */
 public class Car3D {
     private final Vehicle vehicle;
@@ -14,8 +20,12 @@ public class Car3D {
     private final Box windshield;
     private final Box headlightL;
     private final Box headlightR;
-    private final Box taillightL;
-    private final Box taillightR;
+    private final Box taillightL; // ou sirenL pour urgence
+    private final Box taillightR; // ou sirenR pour urgence
+
+    private boolean isEmergency = false;
+    private boolean sirenFlashState = false;
+    private double sirenTimer = 0;
 
     public Car3D(Vehicle vehicle, Box body, Box cabin, Box windshield,
                  Box headlightL, Box headlightR, Box taillightL, Box taillightR) {
@@ -37,8 +47,41 @@ public class Car3D {
     public Vehicle getVehicle() { return vehicle; }
     public Box getBody() { return body; }
 
+    public void setEmergency(boolean emergency) {
+        this.isEmergency = emergency;
+    }
+
+    public boolean isEmergency() { return isEmergency; }
+
     private Box[] getAllParts() {
         return new Box[]{body, cabin, windshield, headlightL, headlightR, taillightL, taillightR};
+    }
+
+    /** Liste des pièces pour suppression de la scène */
+    public List<Box> getAllPartsAsList() {
+        return Arrays.asList(getAllParts());
+    }
+
+    /**
+     * Met à jour la sirène (flash rouge/bleu alterné).
+     * Appelé chaque frame pour les véhicules d'urgence.
+     */
+    public void updateSiren(double deltaTime) {
+        if (!isEmergency) return;
+
+        sirenTimer += deltaTime;
+        if (sirenTimer >= 0.15) { // Flash toutes les 0.15s
+            sirenTimer = 0;
+            sirenFlashState = !sirenFlashState;
+
+            if (sirenFlashState) {
+                taillightL.setMaterial(new PhongMaterial(Color.RED));
+                taillightR.setMaterial(new PhongMaterial(Color.rgb(0, 0, 40)));
+            } else {
+                taillightL.setMaterial(new PhongMaterial(Color.rgb(40, 0, 0)));
+                taillightR.setMaterial(new PhongMaterial(Color.BLUE));
+            }
+        }
     }
 
     /**
@@ -85,19 +128,32 @@ public class Car3D {
         headlightR.setTranslateZ(hz - side * cos);
         headlightR.setRotate(angleDeg);
 
-        // Feux arrière
-        double tailDist = 23;
-        double tx = cx - tailDist * cos;
-        double tz = cz - tailDist * sin;
+        if (isEmergency) {
+            // Gyrophares sur le toit
+            taillightL.setTranslateX(cx - 10 * sin);
+            taillightL.setTranslateY(y - 22);
+            taillightL.setTranslateZ(cz + 10 * cos);
+            taillightL.setRotate(angleDeg);
 
-        taillightL.setTranslateX(tx - side * sin);
-        taillightL.setTranslateY(y);
-        taillightL.setTranslateZ(tz + side * cos);
-        taillightL.setRotate(angleDeg);
+            taillightR.setTranslateX(cx + 10 * sin);
+            taillightR.setTranslateY(y - 22);
+            taillightR.setTranslateZ(cz - 10 * cos);
+            taillightR.setRotate(angleDeg);
+        } else {
+            // Feux arrière
+            double tailDist = 23;
+            double tx = cx - tailDist * cos;
+            double tz = cz - tailDist * sin;
 
-        taillightR.setTranslateX(tx + side * sin);
-        taillightR.setTranslateY(y);
-        taillightR.setTranslateZ(tz - side * cos);
-        taillightR.setRotate(angleDeg);
+            taillightL.setTranslateX(tx - side * sin);
+            taillightL.setTranslateY(y);
+            taillightL.setTranslateZ(tz + side * cos);
+            taillightL.setRotate(angleDeg);
+
+            taillightR.setTranslateX(tx + side * sin);
+            taillightR.setTranslateY(y);
+            taillightR.setTranslateZ(tz - side * cos);
+            taillightR.setRotate(angleDeg);
+        }
     }
 }

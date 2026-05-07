@@ -11,12 +11,43 @@ import javafx.scene.shape.Box;
 import javafx.scene.shape.Cylinder;
 import javafx.scene.shape.Sphere;
 
+/**
+ * Environnement 3D de la ville avec support dynamique :
+ * - Ajout/suppression de voitures à la volée
+ * - Véhicules d'urgence avec gyrophare
+ * - Mode nuit (éclairage modifiable)
+ */
 public class CityEnvironment extends Group {
 
     private static final double ROAD_Y = 55;
 
+    private final AmbientLight ambientLight;
+    private final PointLight sunLight;
+    private final PointLight fillLight;
+
+    // Couleurs selon le type d'urgence
+    private static final Color AMBULANCE_COLOR = Color.WHITE;
+    private static final Color FIRE_COLOR = Color.rgb(220, 30, 30);
+    private static final Color POLICE_COLOR = Color.rgb(30, 60, 200);
+    private static final Color RESCUE_COLOR = Color.rgb(255, 170, 0);
+
     public CityEnvironment() {
-        addLights();
+        // Éclairage (gardé comme référence pour mode nuit)
+        ambientLight = new AmbientLight(Color.color(0.35, 0.35, 0.42));
+        this.getChildren().add(ambientLight);
+
+        sunLight = new PointLight(Color.color(1.0, 0.95, 0.85));
+        sunLight.setTranslateX(-300);
+        sunLight.setTranslateY(-800);
+        sunLight.setTranslateZ(-400);
+        this.getChildren().add(sunLight);
+
+        fillLight = new PointLight(Color.color(0.4, 0.45, 0.6));
+        fillLight.setTranslateX(400);
+        fillLight.setTranslateY(-500);
+        fillLight.setTranslateZ(300);
+        this.getChildren().add(fillLight);
+
         addGround();
         addSidewalks();
         addRoads();
@@ -27,26 +58,19 @@ public class CityEnvironment extends Group {
     }
 
     // ═══════════════════════════════════════════════════════
-    //  ÉCLAIRAGE
+    //  MODE NUIT
     // ═══════════════════════════════════════════════════════
 
-    private void addLights() {
-        AmbientLight ambient = new AmbientLight(Color.color(0.35, 0.35, 0.42));
-        this.getChildren().add(ambient);
-
-        // Lumière principale (soleil)
-        PointLight sun = new PointLight(Color.color(1.0, 0.95, 0.85));
-        sun.setTranslateX(-300);
-        sun.setTranslateY(-800);
-        sun.setTranslateZ(-400);
-        this.getChildren().add(sun);
-
-        // Lumière d'appoint (fill light)
-        PointLight fill = new PointLight(Color.color(0.4, 0.45, 0.6));
-        fill.setTranslateX(400);
-        fill.setTranslateY(-500);
-        fill.setTranslateZ(300);
-        this.getChildren().add(fill);
+    public void setNightMode(boolean night) {
+        if (night) {
+            ambientLight.setColor(Color.color(0.12, 0.12, 0.18));
+            sunLight.setColor(Color.color(0.3, 0.28, 0.25));
+            fillLight.setColor(Color.color(0.15, 0.18, 0.25));
+        } else {
+            ambientLight.setColor(Color.color(0.35, 0.35, 0.42));
+            sunLight.setColor(Color.color(1.0, 0.95, 0.85));
+            fillLight.setColor(Color.color(0.4, 0.45, 0.6));
+        }
     }
 
     // ═══════════════════════════════════════════════════════
@@ -120,10 +144,19 @@ public class CityEnvironment extends Group {
     }
 
     // ═══════════════════════════════════════════════════════
-    //  FEUX TRICOLORES (3 sphères)
+    //  FEUX TRICOLORES (3 sphères — orientés face aux voitures)
     // ═══════════════════════════════════════════════════════
 
-    public TrafficLight3D addTrafficLight(com.example.traffic.model.TrafficLight logicLight, double x, double z) {
+    /**
+     * Crée un feu tricolore orienté vers les voitures.
+     * @param facingAngleDeg 0=face +X(Est), 90=face +Z(Sud), 180=face -X(Ouest), 270=face -Z(Nord)
+     */
+    public TrafficLight3D addTrafficLight(com.example.traffic.model.TrafficLight logicLight,
+                                          double x, double z, double facingAngleDeg) {
+        double rad = Math.toRadians(facingAngleDeg);
+        double dx = Math.cos(rad) * 10; // offset des ampoules
+        double dz = Math.sin(rad) * 10;
+
         // Poteau
         Cylinder pole = new Cylinder(3, 110);
         pole.setTranslateX(x);
@@ -131,32 +164,34 @@ public class CityEnvironment extends Group {
         pole.setTranslateZ(z);
         pole.setMaterial(new PhongMaterial(Color.rgb(50, 50, 50)));
 
-        // Boîtier
+        // Boîtier (légèrement décalé vers la direction des voitures)
         Box box = new Box(18, 55, 14);
-        box.setTranslateX(x);
+        box.setTranslateX(x + dx * 0.3);
         box.setTranslateY(-55);
-        box.setTranslateZ(z);
+        box.setTranslateZ(z + dz * 0.3);
         box.setMaterial(new PhongMaterial(Color.rgb(25, 25, 25)));
+        box.setRotationAxis(javafx.scene.transform.Rotate.Y_AXIS);
+        box.setRotate(facingAngleDeg);
 
-        // Sphère ROUGE (en haut)
+        // Sphère ROUGE (en haut) — face aux voitures
         Sphere redLight = new Sphere(6);
-        redLight.setTranslateX(x);
+        redLight.setTranslateX(x + dx);
         redLight.setTranslateY(-72);
-        redLight.setTranslateZ(z - 8);
+        redLight.setTranslateZ(z + dz);
         redLight.setMaterial(new PhongMaterial(Color.DARKRED));
 
         // Sphère JAUNE (au milieu)
         Sphere yellowLight = new Sphere(6);
-        yellowLight.setTranslateX(x);
+        yellowLight.setTranslateX(x + dx);
         yellowLight.setTranslateY(-55);
-        yellowLight.setTranslateZ(z - 8);
+        yellowLight.setTranslateZ(z + dz);
         yellowLight.setMaterial(new PhongMaterial(Color.rgb(80, 70, 0)));
 
         // Sphère VERTE (en bas)
         Sphere greenLight = new Sphere(6);
-        greenLight.setTranslateX(x);
+        greenLight.setTranslateX(x + dx);
         greenLight.setTranslateY(-38);
-        greenLight.setTranslateZ(z - 8);
+        greenLight.setTranslateZ(z + dz);
         greenLight.setMaterial(new PhongMaterial(Color.DARKGREEN));
 
         this.getChildren().addAll(pole, box, redLight, yellowLight, greenLight);
@@ -165,7 +200,7 @@ public class CityEnvironment extends Group {
     }
 
     // ═══════════════════════════════════════════════════════
-    //  VOITURES MODERNES
+    //  VOITURES NORMALES
     // ═══════════════════════════════════════════════════════
 
     public Car3D addCar(com.example.traffic.model.Vehicle vehicle, Color bodyColor, Color topColor) {
@@ -197,6 +232,64 @@ public class CityEnvironment extends Group {
         this.getChildren().addAll(body, cabin, windshield, headlightL, headlightR, taillightL, taillightR);
 
         return car;
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  VOITURES D'URGENCE
+    // ═══════════════════════════════════════════════════════
+
+    public Car3D addEmergencyCar(com.example.traffic.model.Vehicle vehicle) {
+        Color bodyColor = getEmergencyColor(vehicle.getEmergencyType());
+        Color topColor = bodyColor.brighter();
+
+        // Châssis principal (plus grand)
+        Box body = new Box(54, 18, 28);
+        body.setMaterial(new PhongMaterial(bodyColor));
+
+        // Habitacle
+        Box cabin = new Box(28, 14, 24);
+        cabin.setMaterial(new PhongMaterial(topColor));
+
+        // Pare-brise
+        Box windshield = new Box(2, 12, 20);
+        windshield.setMaterial(new PhongMaterial(Color.rgb(40, 60, 90, 0.7)));
+
+        // Phares avant
+        Box headlightL = new Box(4, 6, 6);
+        headlightL.setMaterial(new PhongMaterial(Color.LIGHTYELLOW));
+        Box headlightR = new Box(4, 6, 6);
+        headlightR.setMaterial(new PhongMaterial(Color.LIGHTYELLOW));
+
+        // Gyrophare gauche (rouge)
+        Box sirenL = new Box(6, 6, 6);
+        sirenL.setMaterial(new PhongMaterial(Color.RED));
+
+        // Gyrophare droit (bleu)
+        Box sirenR = new Box(6, 6, 6);
+        sirenR.setMaterial(new PhongMaterial(Color.BLUE));
+
+        Car3D car = new Car3D(vehicle, body, cabin, windshield, headlightL, headlightR, sirenL, sirenR);
+        car.setEmergency(true);
+        this.getChildren().addAll(body, cabin, windshield, headlightL, headlightR, sirenL, sirenR);
+
+        return car;
+    }
+
+    /** Supprimer une voiture de la scène */
+    public void removeCar(Car3D car) {
+        for (javafx.scene.Node part : car.getAllPartsAsList()) {
+            this.getChildren().remove(part);
+        }
+    }
+
+    private Color getEmergencyColor(String type) {
+        if (type == null) return AMBULANCE_COLOR;
+        switch (type) {
+            case "fire": return FIRE_COLOR;
+            case "police": return POLICE_COLOR;
+            case "rescue": return RESCUE_COLOR;
+            default: return AMBULANCE_COLOR;
+        }
     }
 
     // ═══════════════════════════════════════════════════════

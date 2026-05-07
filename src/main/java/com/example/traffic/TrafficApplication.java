@@ -1,6 +1,7 @@
 package com.example.traffic;
 
 import com.example.traffic.ai.QLearningAgent;
+import com.example.traffic.model.TrafficLight;
 import com.example.traffic.simulation.SimulationEngine;
 import com.example.traffic.ui.AnimationController3D;
 import com.example.traffic.ui.CityEnvironment;
@@ -8,17 +9,14 @@ import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.PerspectiveCamera;
-import javafx.scene.Scene;
-import javafx.scene.SceneAntialiasing;
-import javafx.scene.SubScene;
+import javafx.scene.*;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.transform.Rotate;
@@ -30,199 +28,439 @@ public class TrafficApplication extends Application {
     private boolean running = false;
     private long lastUpdate = 0;
     private Slider speedSlider;
-
     private double mouseOldX, mouseOldY;
     private final Rotate rotateX = new Rotate(0, Rotate.X_AXIS);
     private final Rotate rotateY = new Rotate(0, Rotate.Y_AXIS);
-
     private AnimationController3D animationController;
-    private Label aiStatusLabel;
-    private Label aiScoreLabel;
+
+    // UI Labels
+    private Label fpsLabel, carsLabel, waitNSLabel, waitEWLabel;
+    private Circle nsRed, nsYellow, nsGreen, ewRed, ewYellow, ewGreen;
+    private Label aiStatusLabel, aiScoreLabel, aiDecisionLabel, aiConfidenceLabel, aiReasonLabel;
     private Button aiButton;
+    private VBox aiLogBox;
+    private Label emergencyLabel;
+    private HBox emergencyAlert;
+    private Button btnLow, btnMed, btnHigh;
+    private Button btnRain, btnNight, btnRush;
+
+    // FPS
+    private int frameCount = 0;
+    private long lastFpsTime = 0;
 
     @Override
     public void start(Stage stage) {
-        BorderPane root = new BorderPane();
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        StackPane root = new StackPane();
+        root.setStyle("-fx-background-color: #0f172a;");
 
         CityEnvironment world = new CityEnvironment();
         world.getTransforms().addAll(rotateX, rotateY);
-
         animationController = new AnimationController3D(world);
 
-        SubScene subScene = new SubScene(world, 900, 560, true, SceneAntialiasing.BALANCED);
-        subScene.setFill(Color.rgb(12, 16, 28));
+        SubScene subScene = new SubScene(world, 1100, 700, true, SceneAntialiasing.BALANCED);
+        subScene.setFill(Color.rgb(135, 206, 235));
 
         PerspectiveCamera camera = new PerspectiveCamera(true);
-        camera.setTranslateX(0);
-        camera.setTranslateY(-720);
-        camera.setTranslateZ(-950);
-        camera.setRotationAxis(Rotate.X_AXIS);
-        camera.setRotate(-43);
-        camera.setNearClip(0.1);
-        camera.setFarClip(5000);
-
+        camera.setTranslateX(0); camera.setTranslateY(-720); camera.setTranslateZ(-950);
+        camera.setRotationAxis(Rotate.X_AXIS); camera.setRotate(-43);
+        camera.setNearClip(0.1); camera.setFarClip(5000);
         subScene.setCamera(camera);
 
-        subScene.setOnMousePressed(event -> {
-            mouseOldX = event.getSceneX();
-            mouseOldY = event.getSceneY();
+        subScene.setOnMousePressed(e -> { mouseOldX = e.getSceneX(); mouseOldY = e.getSceneY(); });
+        subScene.setOnMouseDragged(e -> {
+            rotateY.setAngle(rotateY.getAngle() - (e.getSceneX() - mouseOldX) * 0.3);
+            rotateX.setAngle(rotateX.getAngle() + (e.getSceneY() - mouseOldY) * 0.3);
+            mouseOldX = e.getSceneX(); mouseOldY = e.getSceneY();
+        });
+        subScene.setOnScroll(e -> {
+            double f = e.getDeltaY() > 0 ? 0.95 : 1.05;
+            camera.setTranslateY(camera.getTranslateY() * f);
+            camera.setTranslateZ(camera.getTranslateZ() * f);
         });
 
-        subScene.setOnMouseDragged(event -> {
-            double mousePosX = event.getSceneX();
-            double mousePosY = event.getSceneY();
+        // Overlay
+        BorderPane overlay = new BorderPane();
+        overlay.setPickOnBounds(false);
+        overlay.setPadding(new Insets(12));
 
-            rotateY.setAngle(rotateY.getAngle() - (mousePosX - mouseOldX) * 0.3);
-            rotateX.setAngle(rotateX.getAngle() + (mousePosY - mouseOldY) * 0.3);
+        overlay.setTop(createTopBar());
+        overlay.setRight(createRightPanel());
+        overlay.setBottom(createBottomBar());
 
-            mouseOldX = mousePosX;
-            mouseOldY = mousePosY;
-        });
+        emergencyAlert = createEmergencyAlert();
+        emergencyAlert.setVisible(false);
+        StackPane.setAlignment(emergencyAlert, Pos.BOTTOM_LEFT);
+        StackPane.setMargin(emergencyAlert, new Insets(0, 0, 80, 20));
 
-        subScene.setOnScroll(event -> {
-            double zoomFactor = event.getDeltaY() > 0 ? 0.95 : 1.05;
-            camera.setTranslateY(camera.getTranslateY() * zoomFactor);
-            camera.setTranslateZ(camera.getTranslateZ() * zoomFactor);
-        });
+        root.getChildren().addAll(subScene, overlay, emergencyAlert);
 
-        root.setCenter(subScene);
-        root.setBottom(createControls());
+        // Bind SubScene size
+        subScene.widthProperty().bind(root.widthProperty());
+        subScene.heightProperty().bind(root.heightProperty());
 
         timer = new AnimationTimer() {
-            @Override
-            public void handle(long now) {
-                if (!running) {
-                    lastUpdate = now;
-                    return;
-                }
-
-                if (lastUpdate == 0) {
-                    lastUpdate = now;
-                    return;
-                }
-
-                double deltaTime = (now - lastUpdate) / 1_000_000_000.0;
+            @Override public void handle(long now) {
+                if (!running) { lastUpdate = now; return; }
+                if (lastUpdate == 0) { lastUpdate = now; return; }
+                double dt = (now - lastUpdate) / 1_000_000_000.0;
                 lastUpdate = now;
-
-                animationController.update(deltaTime * speedSlider.getValue());
-
-                // Mise à jour du label IA
-                updateAILabels();
+                animationController.update(dt * speedSlider.getValue());
+                updateUI(now);
             }
         };
-
         timer.start();
 
-        Scene scene = new Scene(root, 900, 640);
-        stage.setTitle("🚦 Smart Traffic System — IA & Simulation 3D");
+        Scene scene = new Scene(root, 1100, 700);
+        stage.setTitle("\uD83D\uDEA6 Simulateur Trafic Urbain IA — Règles Françaises");
         stage.setScene(scene);
         stage.show();
-
         animationController.updateTrafficLights();
         animationController.updateCars3D();
     }
 
-    private VBox createControls() {
-        // ── Ligne 1 : Boutons principaux ──
-        Button startButton = createStyledButton("▶ Start", "#27ae60");
-        Button pauseButton = createStyledButton("⏸ Pause", "#e67e22");
-        Button resetButton = createStyledButton("⟲ Reset", "#c0392b");
+    // ═══ TOP BAR ═══
+    private HBox createTopBar() {
+        // Title
+        VBox titleBox = new VBox(2);
+        Label title = new Label("Simulateur Trafic Urbain IA");
+        title.setFont(Font.font("System", FontWeight.BOLD, 18));
+        title.setTextFill(Color.rgb(56, 189, 248));
+        Label subtitle = new Label("Règles Françaises • Q-Learning");
+        subtitle.setFont(Font.font("System", 10));
+        subtitle.setTextFill(Color.rgb(100, 116, 139));
+        titleBox.getChildren().addAll(title, subtitle);
+        HBox titlePanel = wrapPanel(titleBox);
+
+        // Traffic level buttons
+        VBox trafficGroup = new VBox(4);
+        Label trafficLabel = new Label("VOLUME TRAFIC");
+        trafficLabel.setFont(Font.font("System", FontWeight.BOLD, 9));
+        trafficLabel.setTextFill(Color.rgb(148, 163, 184));
+        btnLow = makeToggleBtn("Faible", false);
+        btnMed = makeToggleBtn("Moyen", true);
+        btnHigh = makeToggleBtn("Élevé", false);
+        btnLow.setOnAction(e -> setTrafficLevel(SimulationEngine.TrafficLevel.LOW));
+        btnMed.setOnAction(e -> setTrafficLevel(SimulationEngine.TrafficLevel.MED));
+        btnHigh.setOnAction(e -> setTrafficLevel(SimulationEngine.TrafficLevel.HIGH));
+        HBox btnRow = new HBox(0, btnLow, btnMed, btnHigh);
+        btnRow.setStyle("-fx-background-color: rgba(0,0,0,0.3); -fx-background-radius: 6;");
+        trafficGroup.getChildren().addAll(trafficLabel, btnRow);
+
+        // AI toggle
+        aiButton = new Button("\uD83E\uDDE0 Optimisation IA : OFF");
+        aiButton.setStyle("-fx-background-color: #334155; -fx-text-fill: #94a3b8; -fx-font-weight: bold; " +
+                "-fx-font-size: 12px; -fx-padding: 8 20; -fx-background-radius: 8; -fx-cursor: hand;");
+        aiButton.setOnAction(e -> toggleAI());
+
+        // Controls
+        Button startBtn = makeBtn("▶ Start", "#27ae60");
+        Button pauseBtn = makeBtn("⏸ Pause", "#e67e22");
 
         speedSlider = new Slider(0.5, 5.0, 1.0);
+        speedSlider.setPrefWidth(100);
         speedSlider.setShowTickLabels(true);
-        speedSlider.setShowTickMarks(true);
-        speedSlider.setMajorTickUnit(1.0);
-        speedSlider.setPrefWidth(160);
-        speedSlider.setStyle("-fx-control-inner-background: #2c3e50;");
 
-        Label speedLabel = new Label("Vitesse");
-        speedLabel.setTextFill(Color.WHITE);
-        speedLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
+        startBtn.setOnAction(e -> running = true);
+        pauseBtn.setOnAction(e -> running = false);
 
-        startButton.setOnAction(event -> running = true);
-        pauseButton.setOnAction(event -> running = false);
-        resetButton.setOnAction(event -> {
-            running = false;
-            lastUpdate = 0;
-            animationController.reset();
-            updateAILabels();
-        });
+        HBox controls = new HBox(8, startBtn, pauseBtn, speedSlider, trafficGroup, aiButton);
+        controls.setAlignment(Pos.CENTER_LEFT);
+        HBox controlsPanel = wrapPanel(controls);
 
-        HBox mainControls = new HBox(10, startButton, pauseButton, resetButton, speedLabel, speedSlider);
-        mainControls.setAlignment(Pos.CENTER_LEFT);
+        HBox topBar = new HBox(12, titlePanel, controlsPanel);
+        topBar.setAlignment(Pos.TOP_LEFT);
+        return topBar;
+    }
 
-        // ── Ligne 2 : Contrôles IA ──
-        aiButton = createStyledButton("🧠 Mode IA : OFF", "#8e44ad");
-        aiButton.setPrefWidth(180);
-        aiButton.setOnAction(event -> toggleAI());
+    // ═══ RIGHT PANEL (Telemetry + AI) ═══
+    private VBox createRightPanel() {
+        // Telemetry
+        fpsLabel = statValue("60"); carsLabel = statValue("0");
+        waitNSLabel = statValue("0.0s"); waitEWLabel = statValue("0.0s");
+
+        GridPane stats = new GridPane();
+        stats.setHgap(8); stats.setVgap(8);
+        stats.add(statBox(fpsLabel, "FPS"), 0, 0);
+        stats.add(statBox(carsLabel, "VÉHICULES"), 1, 0);
+        stats.add(statBox(waitNSLabel, "ATTENTE N/S"), 0, 1);
+        stats.add(statBox(waitEWLabel, "ATTENTE E/O"), 1, 1);
+
+        // Traffic lights indicator
+        HBox lightsRow = new HBox(8);
+        lightsRow.setAlignment(Pos.CENTER_LEFT);
+        Label nsLbl = new Label("N/S:"); nsLbl.setTextFill(Color.rgb(148,163,184)); nsLbl.setFont(Font.font(10));
+        nsRed = light(Color.rgb(60,20,20)); nsYellow = light(Color.rgb(60,50,0)); nsGreen = light(Color.rgb(10,60,10));
+        Label ewLbl = new Label("E/O:"); ewLbl.setTextFill(Color.rgb(148,163,184)); ewLbl.setFont(Font.font(10));
+        ewRed = light(Color.rgb(60,20,20)); ewYellow = light(Color.rgb(60,50,0)); ewGreen = light(Color.rgb(10,60,10));
+        lightsRow.getChildren().addAll(nsLbl, nsRed, nsYellow, nsGreen, ewLbl, ewRed, ewYellow, ewGreen);
+
+        VBox telemetry = new VBox(10, stats, lightsRow);
+        VBox telPanel = new VBox(telemetry);
+        telPanel.setStyle(panelStyle());
+        telPanel.setPadding(new Insets(12));
+        telPanel.setPrefWidth(260);
+
+        // AI Panel
+        Label aiTitle = new Label("\uD83E\uDDE0 IA Q-Learning");
+        aiTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
+        aiTitle.setTextFill(Color.rgb(56, 189, 248));
 
         aiStatusLabel = new Label("Mode : Timer classique");
-        aiStatusLabel.setTextFill(Color.LIGHTGRAY);
-        aiStatusLabel.setFont(Font.font("System", 11));
-
+        aiStatusLabel.setTextFill(Color.LIGHTGRAY); aiStatusLabel.setFont(Font.font(10));
         aiScoreLabel = new Label("");
-        aiScoreLabel.setTextFill(Color.rgb(100, 220, 255));
-        aiScoreLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+        aiScoreLabel.setTextFill(Color.rgb(100,220,255)); aiScoreLabel.setFont(Font.font(9)); aiScoreLabel.setWrapText(true);
 
-        HBox aiControls = new HBox(15, aiButton, aiStatusLabel, aiScoreLabel);
-        aiControls.setAlignment(Pos.CENTER_LEFT);
+        aiDecisionLabel = new Label("En attente...");
+        aiDecisionLabel.setTextFill(Color.rgb(56,189,248)); aiDecisionLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+        aiDecisionLabel.setWrapText(true);
+        aiConfidenceLabel = new Label("Confiance: --%");
+        aiConfidenceLabel.setTextFill(Color.rgb(100,116,139)); aiConfidenceLabel.setFont(Font.font(9));
+        aiReasonLabel = new Label("Activez l'IA pour voir les analyses");
+        aiReasonLabel.setTextFill(Color.rgb(203,213,225)); aiReasonLabel.setFont(Font.font(10));
+        aiReasonLabel.setWrapText(true);
 
-        VBox controls = new VBox(6, mainControls, aiControls);
-        controls.setPadding(new Insets(10, 15, 10, 15));
-        controls.setStyle("-fx-background-color: linear-gradient(to bottom, #2c3e50, #1a252f); " +
-                "-fx-border-color: #34495e; -fx-border-width: 1 0 0 0;");
+        VBox decisionBox = new VBox(4, new Label("DÉCISION") {{ setTextFill(Color.rgb(100,116,139)); setFont(Font.font(8)); }},
+                aiDecisionLabel, aiConfidenceLabel);
+        decisionBox.setStyle("-fx-background-color: rgba(56,189,248,0.08); -fx-padding: 8; -fx-background-radius: 6; -fx-border-color: rgba(56,189,248,0.2); -fx-border-radius: 6; -fx-border-width: 0 0 0 2;");
 
-        return controls;
+        VBox reasonBox = new VBox(4, new Label("ANALYSE") {{ setTextFill(Color.rgb(100,116,139)); setFont(Font.font(8)); }}, aiReasonLabel);
+        reasonBox.setStyle("-fx-background-color: rgba(30,41,59,0.5); -fx-padding: 8; -fx-background-radius: 6;");
+
+        aiLogBox = new VBox(2);
+        ScrollPane logScroll = new ScrollPane(aiLogBox);
+        logScroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+        logScroll.setPrefHeight(60); logScroll.setMaxHeight(60); logScroll.setFitToWidth(true);
+
+        VBox logSection = new VBox(4, new Label("HISTORIQUE") {{ setTextFill(Color.rgb(100,116,139)); setFont(Font.font(8)); }}, logScroll);
+        logSection.setStyle("-fx-background-color: rgba(30,41,59,0.5); -fx-padding: 8; -fx-background-radius: 6;");
+
+        VBox aiPanel = new VBox(8, aiTitle, aiStatusLabel, aiScoreLabel, decisionBox, reasonBox, logSection);
+        aiPanel.setStyle(panelStyle());
+        aiPanel.setPadding(new Insets(12));
+        aiPanel.setPrefWidth(260);
+
+        VBox rightPanel = new VBox(10, telPanel, aiPanel);
+        rightPanel.setAlignment(Pos.TOP_RIGHT);
+        return rightPanel;
     }
 
-    private Button createStyledButton(String text, String color) {
-        Button btn = new Button(text);
-        btn.setStyle("-fx-background-color: " + color + "; " +
-                "-fx-text-fill: white; " +
-                "-fx-font-weight: bold; " +
-                "-fx-font-size: 12px; " +
-                "-fx-padding: 6 16; " +
-                "-fx-background-radius: 6; " +
-                "-fx-cursor: hand;");
-        btn.setOnMouseEntered(e -> btn.setStyle(btn.getStyle() + "-fx-opacity: 0.85;"));
-        btn.setOnMouseExited(e -> btn.setStyle(btn.getStyle().replace("-fx-opacity: 0.85;", "")));
-        return btn;
+    // ═══ BOTTOM BAR (Scenarios) ═══
+    private HBox createBottomBar() {
+        Button emergencyBtn = makeScenarioBtn("\uD83D\uDEA8 Urgence", "#ef4444", "#dc2626");
+        emergencyBtn.setOnAction(e -> triggerEmergency());
+
+        btnRain = makeScenarioBtn("\uD83C\uDF27 Pluie", "rgba(59,130,246,0.2)", "rgba(59,130,246,0.4)");
+        btnRain.setTextFill(Color.rgb(96, 165, 250));
+        btnRain.setOnAction(e -> toggleRain());
+
+        btnNight = makeScenarioBtn("\uD83C\uDF19 Nuit", "rgba(139,92,246,0.2)", "rgba(139,92,246,0.4)");
+        btnNight.setTextFill(Color.rgb(167, 139, 250));
+        btnNight.setOnAction(e -> toggleNight());
+
+        btnRush = makeScenarioBtn("\uD83D\uDE97 Heure de Pointe", "rgba(245,158,11,0.2)", "rgba(245,158,11,0.4)");
+        btnRush.setTextFill(Color.rgb(251, 191, 36));
+        btnRush.setOnAction(e -> toggleRushHour());
+
+        Button resetBtn = makeScenarioBtn("↻ Reset", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)");
+        resetBtn.setTextFill(Color.WHITE);
+        resetBtn.setOnAction(e -> resetSimulation());
+
+        HBox bar = new HBox(8, emergencyBtn, btnRain, btnNight, btnRush, resetBtn);
+        bar.setAlignment(Pos.CENTER);
+        bar.setPadding(new Insets(8));
+        return bar;
     }
 
+    // ═══ EMERGENCY ALERT ═══
+    private HBox createEmergencyAlert() {
+        emergencyLabel = new Label("\uD83D\uDEA8 Véhicule d'urgence en approche!");
+        emergencyLabel.setTextFill(Color.WHITE);
+        emergencyLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+        HBox alert = new HBox(8, emergencyLabel);
+        alert.setStyle("-fx-background-color: rgba(239,68,68,0.95); -fx-padding: 10 16; -fx-background-radius: 8;");
+        alert.setMaxWidth(350); alert.setMaxHeight(40);
+        return alert;
+    }
+
+    // ═══ ACTIONS ═══
     private void toggleAI() {
         SimulationEngine engine = animationController.getSimulationEngine();
         boolean newMode = !engine.isAiMode();
         engine.setAiMode(newMode);
-
         if (newMode) {
-            aiButton.setText("🧠 Mode IA : ON");
-            aiButton.setStyle(aiButton.getStyle().replace("#8e44ad", "#2ecc71"));
-            aiStatusLabel.setText("Mode : Q-Learning actif");
-            aiStatusLabel.setTextFill(Color.LIMEGREEN);
+            aiButton.setStyle("-fx-background-color: linear-gradient(to right, #4f46e5, #9333ea); -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px; -fx-padding: 8 20; -fx-background-radius: 8; -fx-cursor: hand;");
+            aiButton.setText("\uD83E\uDDE0 Optimisation IA : ON");
+            aiStatusLabel.setText("Mode : Q-Learning actif"); aiStatusLabel.setTextFill(Color.LIMEGREEN);
         } else {
-            aiButton.setText("🧠 Mode IA : OFF");
-            aiButton.setStyle(aiButton.getStyle().replace("#2ecc71", "#8e44ad"));
-            aiStatusLabel.setText("Mode : Timer classique");
-            aiStatusLabel.setTextFill(Color.LIGHTGRAY);
+            aiButton.setStyle("-fx-background-color: #334155; -fx-text-fill: #94a3b8; -fx-font-weight: bold; -fx-font-size: 12px; -fx-padding: 8 20; -fx-background-radius: 8; -fx-cursor: hand;");
+            aiButton.setText("\uD83E\uDDE0 Optimisation IA : OFF");
+            aiStatusLabel.setText("Mode : Timer classique"); aiStatusLabel.setTextFill(Color.LIGHTGRAY);
             aiScoreLabel.setText("");
         }
     }
 
-    private void updateAILabels() {
+    private void setTrafficLevel(SimulationEngine.TrafficLevel level) {
+        animationController.getSimulationEngine().setTrafficLevel(level);
+        btnLow.setStyle(toggleStyle(level == SimulationEngine.TrafficLevel.LOW));
+        btnMed.setStyle(toggleStyle(level == SimulationEngine.TrafficLevel.MED));
+        btnHigh.setStyle(toggleStyle(level == SimulationEngine.TrafficLevel.HIGH));
+    }
+
+    private void triggerEmergency() {
         SimulationEngine engine = animationController.getSimulationEngine();
+        if (engine.getActiveEmergency() != null) return;
+        engine.spawnEmergencyVehicle();
+        emergencyAlert.setVisible(true);
+        emergencyLabel.setText("\uD83D\uDEA8 Véhicule d'urgence en approche!");
+    }
+
+    private void toggleRain() {
+        SimulationEngine engine = animationController.getSimulationEngine();
+        engine.setRainMode(!engine.isRainMode());
+        btnRain.setStyle(engine.isRainMode() ?
+                "-fx-background-color: rgba(59,130,246,0.5); -fx-text-fill: #93c5fd; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand;" :
+                "-fx-background-color: rgba(59,130,246,0.2); -fx-text-fill: #60a5fa; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand;");
+    }
+
+    private void toggleNight() {
+        SimulationEngine engine = animationController.getSimulationEngine();
+        engine.setNightMode(!engine.isNightMode());
+        // Also change 3D environment
+        // Access the CityEnvironment through reflection or direct reference is complex
+        // For now, just update the SubScene fill
+        btnNight.setStyle(engine.isNightMode() ?
+                "-fx-background-color: rgba(139,92,246,0.5); -fx-text-fill: #c4b5fd; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand;" :
+                "-fx-background-color: rgba(139,92,246,0.2); -fx-text-fill: #a78bfa; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand;");
+    }
+
+    private void toggleRushHour() {
+        SimulationEngine engine = animationController.getSimulationEngine();
+        engine.setRushHour(!engine.isRushHour());
+        btnRush.setStyle(engine.isRushHour() ?
+                "-fx-background-color: rgba(245,158,11,0.5); -fx-text-fill: #fcd34d; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand;" :
+                "-fx-background-color: rgba(245,158,11,0.2); -fx-text-fill: #fbbf24; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand;");
+    }
+
+    private void resetSimulation() {
+        running = false; lastUpdate = 0;
+        animationController.reset();
+        emergencyAlert.setVisible(false);
+        aiLogBox.getChildren().clear();
+        aiReasonLabel.setText("Simulation réinitialisée...");
+        aiDecisionLabel.setText("En attente...");
+    }
+
+    // ═══ UI UPDATE (each frame) ═══
+    private void updateUI(long now) {
+        frameCount++;
+        if (now - lastFpsTime >= 1_000_000_000L) {
+            fpsLabel.setText(String.valueOf(frameCount));
+            frameCount = 0; lastFpsTime = now;
+        }
+
+        SimulationEngine engine = animationController.getSimulationEngine();
+        carsLabel.setText(String.valueOf(animationController.getActiveCarsCount()));
+        waitNSLabel.setText(String.format("%.1fs", engine.getAvgWaitNS()));
+        waitEWLabel.setText(String.format("%.1fs", engine.getAvgWaitEW()));
+
+        // Traffic light indicators
+        updateLightIndicator(engine.getNsState(), nsRed, nsYellow, nsGreen);
+        updateLightIndicator(engine.getEwState(), ewRed, ewYellow, ewGreen);
+
+        // Emergency alert
+        if (engine.getActiveEmergency() == null) emergencyAlert.setVisible(false);
+
+        // AI panel
         if (engine.isAiMode() && engine.getAgent() != null) {
             QLearningAgent agent = engine.getAgent();
-            aiScoreLabel.setText(String.format(
-                    "Score: %.1f | Étapes: %d | Exploration: %.0f%% | États appris: %d",
-                    agent.getTotalReward(),
-                    agent.getTotalSteps(),
-                    agent.getEpsilon() * 100,
-                    agent.getQTableSize()));
+            aiScoreLabel.setText(String.format("Score: %.1f | Étapes: %d | ε: %.0f%% | États: %d",
+                    agent.getTotalReward(), agent.getTotalSteps(), agent.getEpsilon() * 100, agent.getQTableSize()));
+            aiDecisionLabel.setText(agent.getLastActionName());
+            aiConfidenceLabel.setText(String.format("Confiance: %.0f%%", agent.getLastConfidence() * 100));
+            aiReasonLabel.setText(agent.getLastDecisionReason());
+        }
+
+        // AI Log sync
+        java.util.List<String> log = engine.getAiLog();
+        if (aiLogBox.getChildren().size() != log.size()) {
+            aiLogBox.getChildren().clear();
+            for (String entry : log) {
+                Label l = new Label(entry);
+                l.setTextFill(entry.contains("🚨") ? Color.rgb(239,68,68) : Color.rgb(148,163,184));
+                l.setFont(Font.font(9)); l.setWrapText(true);
+                aiLogBox.getChildren().add(l);
+            }
         }
     }
 
-    public static void main(String[] args) {
-        launch(args);
+    private void updateLightIndicator(TrafficLight.State state, Circle red, Circle yellow, Circle green) {
+        red.setFill(Color.rgb(60,20,20)); yellow.setFill(Color.rgb(60,50,0)); green.setFill(Color.rgb(10,60,10));
+        switch (state) {
+            case RED: red.setFill(Color.RED); break;
+            case YELLOW: yellow.setFill(Color.rgb(255,200,0)); break;
+            case GREEN: green.setFill(Color.LIMEGREEN); break;
+            case RED_YELLOW: red.setFill(Color.RED); yellow.setFill(Color.rgb(255,200,0)); break;
+        }
     }
+
+    // ═══ UI HELPERS ═══
+    private String panelStyle() {
+        return "-fx-background-color: rgba(15,23,42,0.85); -fx-background-radius: 10; -fx-border-color: rgba(255,255,255,0.1); -fx-border-radius: 10;";
+    }
+
+    private HBox wrapPanel(javafx.scene.Node content) {
+        HBox box = new HBox(content);
+        box.setStyle(panelStyle());
+        box.setPadding(new Insets(10, 16, 10, 16));
+        return box;
+    }
+
+    private Label statValue(String text) {
+        Label l = new Label(text);
+        l.setFont(Font.font("Consolas", FontWeight.BOLD, 18));
+        l.setTextFill(Color.rgb(56, 189, 248));
+        return l;
+    }
+
+    private VBox statBox(Label value, String label) {
+        Label lbl = new Label(label);
+        lbl.setFont(Font.font("System", 8));
+        lbl.setTextFill(Color.rgb(100, 116, 139));
+        VBox box = new VBox(2, value, lbl);
+        box.setStyle("-fx-background-color: rgba(30,41,59,0.6); -fx-padding: 8; -fx-background-radius: 6;");
+        box.setPrefWidth(110);
+        return box;
+    }
+
+    private Circle light(Color color) {
+        Circle c = new Circle(7, color);
+        c.setStroke(Color.rgb(40,40,40)); c.setStrokeWidth(1);
+        return c;
+    }
+
+    private Button makeBtn(String text, String color) {
+        Button btn = new Button(text);
+        btn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 6 14; -fx-background-radius: 6; -fx-cursor: hand;");
+        return btn;
+    }
+
+    private Button makeToggleBtn(String text, boolean active) {
+        Button btn = new Button(text);
+        btn.setStyle(toggleStyle(active));
+        return btn;
+    }
+
+    private String toggleStyle(boolean active) {
+        return active ?
+                "-fx-background-color: #0ea5e9; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 0; -fx-cursor: hand;" :
+                "-fx-background-color: transparent; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 0; -fx-cursor: hand;";
+    }
+
+    private Button makeScenarioBtn(String text, String bg, String border) {
+        Button btn = new Button(text);
+        btn.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 8 14; -fx-background-radius: 8; -fx-cursor: hand; -fx-border-color: " + border + "; -fx-border-radius: 8;");
+        return btn;
+    }
+
+    public static void main(String[] args) { launch(args); }
 }

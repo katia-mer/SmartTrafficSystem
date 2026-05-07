@@ -32,20 +32,45 @@ public class QLearningAgent {
     private double totalReward = 0.0;
     private int totalSteps = 0;
 
+    // Dernière décision (pour le panneau IA)
+    private String lastDecisionReason = "En attente...";
+    private double lastConfidence = 0.0;
+    private String lastAction = "KEEP";
+
     /**
      * Choisit une action avec la stratégie epsilon-greedy.
      * @param state l'état actuel du trafic
      * @return 0 (vert WE) ou 1 (vert NS)
      */
     public int chooseAction(TrafficState state) {
+        double[] qValues = getQValues(state);
+
         // Exploration : action aléatoire
         if (random.nextDouble() < epsilon) {
-            return random.nextInt(2);
+            int action = random.nextInt(2);
+            lastConfidence = 0.5;
+            lastDecisionReason = "Exploration aléatoire (ε=" + String.format("%.0f", epsilon * 100) + "%)";
+            lastAction = action == 0 ? "VERT E/O" : "VERT N/S";
+            return action;
         }
 
         // Exploitation : meilleure action connue
-        double[] qValues = getQValues(state);
-        return qValues[0] >= qValues[1] ? 0 : 1;
+        int bestAction = qValues[0] >= qValues[1] ? 0 : 1;
+        double maxQ = Math.max(qValues[0], qValues[1]);
+        double minQ = Math.min(qValues[0], qValues[1]);
+        lastConfidence = maxQ == 0 && minQ == 0 ? 0.5 : Math.min(0.99, 0.6 + Math.abs(maxQ - minQ) * 0.1);
+
+        if (bestAction == 0) {
+            lastDecisionReason = String.format("E/O prioritaire (Q=%.2f vs %.2f). %d véh. E/O en attente.",
+                    qValues[0], qValues[1], state.getWaitingWestEast());
+            lastAction = "VERT E/O";
+        } else {
+            lastDecisionReason = String.format("N/S prioritaire (Q=%.2f vs %.2f). %d véh. N/S en attente.",
+                    qValues[1], qValues[0], state.getWaitingNorthSouth());
+            lastAction = "VERT N/S";
+        }
+
+        return bestAction;
     }
 
     /**
@@ -81,25 +106,20 @@ public class QLearningAgent {
 
     // ── Getters ──────────────────────────────────────────
 
-    public double getTotalReward() {
-        return totalReward;
-    }
-
-    public int getTotalSteps() {
-        return totalSteps;
-    }
+    public double getTotalReward() { return totalReward; }
+    public int getTotalSteps() { return totalSteps; }
 
     public double getAverageReward() {
         return totalSteps == 0 ? 0.0 : totalReward / totalSteps;
     }
 
-    public double getEpsilon() {
-        return epsilon;
-    }
+    public double getEpsilon() { return epsilon; }
+    public int getQTableSize() { return qTable.size(); }
 
-    public int getQTableSize() {
-        return qTable.size();
-    }
+    // ── Infos décision pour le panneau IA ──────────────
+    public String getLastDecisionReason() { return lastDecisionReason; }
+    public double getLastConfidence() { return lastConfidence; }
+    public String getLastActionName() { return lastAction; }
 
     /** Réinitialise l'agent */
     public void reset() {
@@ -107,5 +127,8 @@ public class QLearningAgent {
         totalReward = 0.0;
         totalSteps = 0;
         epsilon = 0.3;
+        lastDecisionReason = "En attente...";
+        lastConfidence = 0.0;
+        lastAction = "KEEP";
     }
 }
