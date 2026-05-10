@@ -24,6 +24,9 @@ public class CityEnvironment extends Group {
     private final AmbientLight ambientLight;
     private final PointLight sunLight;
     private final PointLight fillLight;
+    private final Group rainSystem = new Group();
+    private Sphere sky;
+    private PhongMaterial skyMat;
 
     // Couleurs selon le type d'urgence
     private static final Color AMBULANCE_COLOR = Color.WHITE;
@@ -33,7 +36,8 @@ public class CityEnvironment extends Group {
 
     public CityEnvironment() {
         // Éclairage (gardé comme référence pour mode nuit)
-        ambientLight = new AmbientLight(Color.color(0.35, 0.35, 0.42));
+        // Éclairage plus vif pour le mode normal
+        ambientLight = new AmbientLight(Color.color(0.55, 0.55, 0.62));
         this.getChildren().add(ambientLight);
 
         sunLight = new PointLight(Color.color(1.0, 0.95, 0.85));
@@ -42,7 +46,7 @@ public class CityEnvironment extends Group {
         sunLight.setTranslateZ(-400);
         this.getChildren().add(sunLight);
 
-        fillLight = new PointLight(Color.color(0.4, 0.45, 0.6));
+        fillLight = new PointLight(Color.color(0.6, 0.65, 0.8));
         fillLight.setTranslateX(400);
         fillLight.setTranslateY(-500);
         fillLight.setTranslateZ(300);
@@ -55,6 +59,8 @@ public class CityEnvironment extends Group {
         addBuildings();
         addTrees();
         addLampposts();
+        createSkybox();
+        createRainSystem();
     }
 
     // ═══════════════════════════════════════════════════════
@@ -62,36 +68,102 @@ public class CityEnvironment extends Group {
     // ═══════════════════════════════════════════════════════
 
     public void setNightMode(boolean night) {
+        Color skyColor = night ? Color.rgb(10, 15, 30) : Color.rgb(135, 206, 235);
         if (night) {
             ambientLight.setColor(Color.color(0.12, 0.12, 0.18));
             sunLight.setColor(Color.color(0.3, 0.28, 0.25));
             fillLight.setColor(Color.color(0.15, 0.18, 0.25));
         } else {
-            ambientLight.setColor(Color.color(0.35, 0.35, 0.42));
-            sunLight.setColor(Color.color(1.0, 0.95, 0.85));
-            fillLight.setColor(Color.color(0.4, 0.45, 0.6));
+            ambientLight.setColor(Color.color(0.55, 0.55, 0.62));
+            sunLight.setColor(Color.color(1.0, 1.0, 1.0));
+            fillLight.setColor(Color.color(0.6, 0.65, 0.8));
+        }
+        
+        if (skyMat != null) skyMat.setDiffuseColor(skyColor);
+    }
+
+    public void setRainMode(boolean rain) {
+        rainSystem.setVisible(rain);
+        if (rain) {
+            Color rainSky = Color.rgb(70, 80, 95);
+            ambientLight.setColor(ambientLight.getColor().deriveColor(0, 0.7, 0.8, 1.0));
+            sunLight.setColor(sunLight.getColor().deriveColor(0, 0.5, 0.6, 1.0));
+            if (skyMat != null) skyMat.setDiffuseColor(rainSky);
+        } else {
+            setNightMode(false); // Reset to default
         }
     }
+
+
+    private void createRainSystem() {
+        rainSystem.setVisible(false);
+        PhongMaterial rainMat = new PhongMaterial(Color.rgb(150, 180, 255, 0.4));
+        java.util.Random rnd = new java.util.Random();
+        for (int i = 0; i < 500; i++) {
+            Cylinder drop = new Cylinder(0.5, 15);
+            drop.setMaterial(rainMat);
+            drop.setTranslateX(rnd.nextDouble() * 1200 - 600);
+            drop.setTranslateY(rnd.nextDouble() * 600 - 400); // Plage de hauteur plus grande
+            drop.setTranslateZ(rnd.nextDouble() * 1200 - 600);
+            drop.setRotate(10); // Pluie tombant un peu de biais
+            rainSystem.getChildren().add(drop);
+        }
+        this.getChildren().add(rainSystem);
+    }
+
+    public void updateRain(double dt) {
+        if (!rainSystem.isVisible()) return;
+        
+        for (javafx.scene.Node node : rainSystem.getChildren()) {
+            if (node instanceof Cylinder) {
+                Cylinder drop = (Cylinder) node;
+                double speed = 400 + Math.random() * 200; // Vitesse variée
+                drop.setTranslateY(drop.getTranslateY() + speed * dt);
+                
+                // Si la goutte touche le sol (y > 90), on la remet en haut
+                if (drop.getTranslateY() > 100) {
+                    drop.setTranslateY(-400);
+                }
+            }
+        }
+    }
+
+    private void createSkybox() {
+        // Dôme céleste principal (couleur brumeuse)
+        sky = new Sphere(2500);
+        skyMat = new PhongMaterial(Color.rgb(210, 225, 240));
+        skyMat.setSpecularColor(Color.WHITE);
+        skyMat.setSpecularPower(10);
+        sky.setMaterial(skyMat);
+        sky.setCullFace(javafx.scene.shape.CullFace.FRONT);
+        this.getChildren().add(sky);
+
+        // Couche de brouillard lumineux (halo à l'horizon)
+        Sphere horizonFog = new Sphere(2450);
+        PhongMaterial fogMat = new PhongMaterial(Color.rgb(255, 255, 255, 0.4));
+        horizonFog.setMaterial(fogMat);
+        horizonFog.setCullFace(javafx.scene.shape.CullFace.FRONT);
+        this.getChildren().add(horizonFog);
+    }
+
 
     // ═══════════════════════════════════════════════════════
     //  SOL & TROTTOIRS
     // ═══════════════════════════════════════════════════════
 
     private void addGround() {
-        Box ground = new Box(1200, 10, 1200);
-        ground.setTranslateY(92);
-        ground.setMaterial(new PhongMaterial(Color.rgb(30, 105, 45)));
-        this.getChildren().add(ground);
+        Color groundColor = Color.rgb(20, 22, 28);
+        addBox(0, 60, 0, 10000, 2, 10000, groundColor);
     }
 
     private void addSidewalks() {
         Color sidewalkColor = Color.rgb(160, 160, 155);
-        // Trottoirs le long de la route horizontale
-        addBox(0, 60, -80, 950, 6, 30, sidewalkColor);
-        addBox(0, 60, 80, 950, 6, 30, sidewalkColor);
+        // Trottoirs le long de la route horizontale (ajustés pour route 160)
+        addBox(0, 60, -100, 5000, 6, 40, sidewalkColor);
+        addBox(0, 60, 100, 5000, 6, 40, sidewalkColor);
         // Trottoirs le long de la route verticale
-        addBox(-80, 60, 0, 30, 6, 950, sidewalkColor);
-        addBox(80, 60, 0, 30, 6, 950, sidewalkColor);
+        addBox(-100, 60, 0, 40, 6, 5000, sidewalkColor);
+        addBox(100, 60, 0, 40, 6, 5000, sidewalkColor);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -99,38 +171,39 @@ public class CityEnvironment extends Group {
     // ═══════════════════════════════════════════════════════
 
     private void addRoads() {
-        Color asphalt = Color.rgb(38, 38, 42);
-        addBox(0, ROAD_Y, 0, 950, 12, 120, asphalt);
-        addBox(0, ROAD_Y, 0, 120, 12, 950, asphalt);
+        Color asphalt = Color.rgb(25, 26, 30);
+        addBox(0, ROAD_Y, 0, 5000, 12, 160, asphalt);
+        addBox(0, ROAD_Y, 0, 160, 12, 5000, asphalt);
+
+        // Lignes néon vert fluo le long des routes
+        Color neonGreen = Color.rgb(0, 255, 150);
+        addBox(0, ROAD_Y - 2, -78, 5000, 1, 3, neonGreen);
+        addBox(0, ROAD_Y - 2, 78, 5000, 1, 3, neonGreen);
+        addBox(-78, ROAD_Y - 2, 0, 3, 1, 5000, neonGreen);
+        addBox(78, ROAD_Y - 2, 0, 3, 1, 5000, neonGreen);
 
         // Bordures de route
-        Color curb = Color.rgb(130, 130, 125);
-        addBox(0, 50, -65, 950, 5, 8, curb);
-        addBox(0, 50, 65, 950, 5, 8, curb);
-        addBox(-65, 50, 0, 8, 5, 950, curb);
-        addBox(65, 50, 0, 8, 5, 950, curb);
+        Color curb = Color.rgb(60, 60, 65);
+        addBox(0, 50, -85, 5000, 5, 10, curb);
+        addBox(0, 50, 85, 5000, 5, 10, curb);
+        addBox(-85, 50, 0, 10, 5, 5000, curb);
+        addBox(85, 50, 0, 10, 5, 5000, curb);
     }
 
     private void addRoadMarks() {
         // Lignes centrales (pointillés jaunes)
         Color lineColor = Color.rgb(230, 200, 50);
-        for (int i = -4; i <= 4; i++) {
-            if (Math.abs(i) <= 0) continue; // pas dans l'intersection
-            addBox(i * 85, 47, 0, 40, 2, 4, lineColor);
-            addBox(0, 47, i * 85, 4, 2, 40, lineColor);
+        for (int i = -8; i <= 8; i++) {
+            if (Math.abs(i * 100) < 100) continue; 
+            addBox(i * 100, 47, 0, 40, 2, 3, lineColor);
+            addBox(0, 47, i * 100, 3, 2, 40, lineColor);
         }
 
-        // Lignes d'arrêt (blanches)
-        addBox(-80, 44, 30, 6, 3, 50, Color.WHITE);
-        addBox(80, 44, -30, 6, 3, 50, Color.WHITE);
-        addBox(-30, 44, -80, 50, 3, 6, Color.WHITE);
-        addBox(30, 44, 80, 50, 3, 6, Color.WHITE);
-
-        // Passages piétons
-        addCrosswalk(-120, 0, true);
-        addCrosswalk(120, 0, true);
-        addCrosswalk(0, -120, false);
-        addCrosswalk(0, 120, false);
+        // Passages piétons (ajustés pour route 160)
+        addCrosswalk(-140, 0, true);
+        addCrosswalk(140, 0, true);
+        addCrosswalk(0, -140, false);
+        addCrosswalk(0, 140, false);
     }
 
     private void addCrosswalk(double x, double z, boolean horizontal) {
@@ -204,33 +277,131 @@ public class CityEnvironment extends Group {
     // ═══════════════════════════════════════════════════════
 
     public Car3D addCar(com.example.traffic.model.Vehicle vehicle, Color bodyColor, Color topColor) {
-        // Châssis principal (plus bas et large)
-        Box body = new Box(48, 14, 26);
-        body.setMaterial(new PhongMaterial(bodyColor));
+        boolean isFuturistic = Math.random() > 0.7; // 30% de chance d'avoir une voiture futuriste
+        
+        if (isFuturistic) {
+            return addFuturisticCar(vehicle);
+        }
 
-        // Habitacle (toit arrondi via box plus petit)
-        Box cabin = new Box(26, 12, 22);
+        PhongMaterial bodyMat = new PhongMaterial(bodyColor);
+        bodyMat.setSpecularColor(Color.WHITE);
+        bodyMat.setSpecularPower(30);
+
+        PhongMaterial wheelMat = new PhongMaterial(Color.rgb(25, 25, 25));
+        PhongMaterial mirrorMat = new PhongMaterial(bodyColor.darker());
+
+        // Corps Central
+        Box body = new Box(18, 12, 26);
+        body.setMaterial(bodyMat);
+
+        // Capot
+        Box hood = new Box(18, 8, 24);
+        hood.setMaterial(bodyMat);
+
+        // Coffre
+        Box trunk = new Box(18, 8, 24);
+        trunk.setMaterial(bodyMat);
+
+        // Habitacle
+        Box cabin = new Box(24, 10, 22);
         cabin.setMaterial(new PhongMaterial(topColor));
 
-        // Pare-brise (vitre teintée)
-        Box windshield = new Box(2, 10, 18);
-        windshield.setMaterial(new PhongMaterial(Color.rgb(40, 60, 90, 0.7)));
+        // Pare-brise
+        Box windshield = new Box(2, 9, 20);
+        windshield.setMaterial(new PhongMaterial(Color.rgb(180, 210, 255, 0.5)));
 
-        // Phares avant (gauche et droit)
+        // Phares
         Box headlightL = new Box(3, 5, 5);
-        headlightL.setMaterial(new PhongMaterial(Color.LIGHTYELLOW));
+        headlightL.setMaterial(new PhongMaterial(Color.WHITESMOKE));
         Box headlightR = new Box(3, 5, 5);
-        headlightR.setMaterial(new PhongMaterial(Color.LIGHTYELLOW));
+        headlightR.setMaterial(new PhongMaterial(Color.WHITESMOKE));
 
-        // Feux arrière (rouges)
-        Box taillightL = new Box(3, 4, 5);
-        taillightL.setMaterial(new PhongMaterial(Color.DARKRED));
-        Box taillightR = new Box(3, 4, 5);
-        taillightR.setMaterial(new PhongMaterial(Color.DARKRED));
+        // Feux arrière
+        Box taillightL = new Box(2, 3, 5);
+        taillightL.setMaterial(new PhongMaterial(Color.rgb(100, 0, 0)));
+        Box taillightR = new Box(2, 3, 5);
+        taillightR.setMaterial(new PhongMaterial(Color.rgb(100, 0, 0)));
 
-        Car3D car = new Car3D(vehicle, body, cabin, windshield, headlightL, headlightR, taillightL, taillightR);
-        this.getChildren().addAll(body, cabin, windshield, headlightL, headlightR, taillightL, taillightR);
+        // Rétroviseurs
+        Box mirrorL = new Box(2, 3, 4);
+        mirrorL.setMaterial(mirrorMat);
+        Box mirrorR = new Box(2, 3, 4);
+        mirrorR.setMaterial(mirrorMat);
 
+        // Roues
+        java.util.List<javafx.scene.shape.Shape3D> wheels = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            Cylinder wheel = new Cylinder(7, 4);
+            wheel.setMaterial(wheelMat);
+            wheel.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
+            wheel.setRotate(90);
+            wheels.add(wheel);
+        }
+
+        Car3D car = new Car3D(vehicle, body, hood, trunk, cabin, windshield, headlightL, headlightR, taillightL, taillightR, mirrorL, mirrorR, wheels);
+        this.getChildren().addAll(car.getAllPartsAsList());
+
+        return car;
+    }
+
+    private Car3D addFuturisticCar(com.example.traffic.model.Vehicle vehicle) {
+        Color neonBlue = Color.rgb(0, 200, 255);
+        PhongMaterial bodyMat = new PhongMaterial(Color.rgb(20, 30, 50)); // Sombre
+        bodyMat.setSpecularColor(neonBlue);
+        bodyMat.setSpecularPower(50);
+        
+        PhongMaterial accentMat = new PhongMaterial(Color.WHITE);
+        PhongMaterial ledMat = new PhongMaterial(neonBlue);
+        ledMat.setSelfIlluminationMap(null); // Pas de map, mais on peut simuler avec une couleur vive
+
+        Box body = new Box(16, 10, 24);
+        body.setMaterial(bodyMat);
+
+        Box hood = new Box(20, 6, 22);
+        hood.setMaterial(accentMat); // Blanc pour le capot style futuriste
+
+        Box trunk = new Box(16, 6, 22);
+        trunk.setMaterial(bodyMat);
+
+        Box cabin = new Box(22, 12, 20);
+        cabin.setMaterial(new PhongMaterial(Color.rgb(10, 10, 10, 0.9)));
+
+        Box windshield = new Box(2, 11, 18);
+        windshield.setMaterial(new PhongMaterial(Color.rgb(0, 255, 255, 0.4)));
+
+        // LED Lights au lieu de phares classiques
+        Box ledL = new Box(6, 1, 4);
+        ledL.setMaterial(ledMat);
+        Box ledR = new Box(6, 1, 4);
+        ledR.setMaterial(ledMat);
+
+        // LED Taillights (rouges/néon)
+        PhongMaterial redLedMat = new PhongMaterial(Color.rgb(255, 50, 50));
+        Box tailLedL = new Box(6, 1, 4);
+        tailLedL.setMaterial(redLedMat);
+        Box tailLedR = new Box(6, 1, 4);
+        tailLedR.setMaterial(redLedMat);
+
+        // Rétros fins
+        Box mirrorL = new Box(1, 1, 6);
+        mirrorL.setMaterial(ledMat);
+        Box mirrorR = new Box(1, 1, 6);
+        mirrorR.setMaterial(ledMat);
+
+        java.util.List<javafx.scene.shape.Shape3D> wheels = new java.util.ArrayList<>();
+        PhongMaterial wheelMat = new PhongMaterial(Color.rgb(10, 10, 10));
+        wheelMat.setSpecularColor(neonBlue);
+        for (int i = 0; i < 4; i++) {
+            Cylinder wheel = new Cylinder(7, 3);
+            wheel.setMaterial(wheelMat);
+            wheel.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
+            wheel.setRotate(90);
+            wheels.add(wheel);
+        }
+
+        Car3D car = new Car3D(vehicle, body, hood, trunk, cabin, windshield, ledL, ledR, tailLedL, tailLedR, mirrorL, mirrorR, wheels);
+        this.getChildren().addAll(body, hood, trunk, cabin, windshield, ledL, ledR, tailLedL, tailLedR, mirrorL, mirrorR);
+        this.getChildren().addAll(wheels);
         return car;
     }
 
@@ -240,37 +411,54 @@ public class CityEnvironment extends Group {
 
     public Car3D addEmergencyCar(com.example.traffic.model.Vehicle vehicle) {
         Color bodyColor = getEmergencyColor(vehicle.getEmergencyType());
-        Color topColor = bodyColor.brighter();
+        PhongMaterial bodyMat = new PhongMaterial(bodyColor);
+        bodyMat.setSpecularColor(Color.WHITE);
+        
+        PhongMaterial wheelMat = new PhongMaterial(Color.rgb(15, 15, 15));
 
-        // Châssis principal (plus grand)
-        Box body = new Box(54, 18, 28);
-        body.setMaterial(new PhongMaterial(bodyColor));
+        Box body = new Box(22, 16, 28);
+        body.setMaterial(bodyMat);
 
-        // Habitacle
-        Box cabin = new Box(28, 14, 24);
-        cabin.setMaterial(new PhongMaterial(topColor));
+        Box hood = new Box(20, 12, 26);
+        hood.setMaterial(bodyMat);
 
-        // Pare-brise
-        Box windshield = new Box(2, 12, 20);
-        windshield.setMaterial(new PhongMaterial(Color.rgb(40, 60, 90, 0.7)));
+        Box trunk = new Box(20, 12, 26);
+        trunk.setMaterial(bodyMat);
 
-        // Phares avant
-        Box headlightL = new Box(4, 6, 6);
-        headlightL.setMaterial(new PhongMaterial(Color.LIGHTYELLOW));
-        Box headlightR = new Box(4, 6, 6);
-        headlightR.setMaterial(new PhongMaterial(Color.LIGHTYELLOW));
+        Box cabin = new Box(26, 12, 24);
+        cabin.setMaterial(new PhongMaterial(bodyColor.brighter()));
 
-        // Gyrophare gauche (rouge)
-        Box sirenL = new Box(6, 6, 6);
+        Box windshield = new Box(2, 11, 22);
+        windshield.setMaterial(new PhongMaterial(Color.rgb(150, 200, 255, 0.6)));
+
+        Box headlightL = new Box(4, 5, 6);
+        headlightL.setMaterial(new PhongMaterial(Color.WHITE));
+        Box headlightR = new Box(4, 5, 6);
+        headlightR.setMaterial(new PhongMaterial(Color.WHITE));
+
+        Box sirenL = new Box(8, 8, 8);
         sirenL.setMaterial(new PhongMaterial(Color.RED));
-
-        // Gyrophare droit (bleu)
-        Box sirenR = new Box(6, 6, 6);
+        Box sirenR = new Box(8, 8, 8);
         sirenR.setMaterial(new PhongMaterial(Color.BLUE));
 
-        Car3D car = new Car3D(vehicle, body, cabin, windshield, headlightL, headlightR, sirenL, sirenR);
+        Box mirrorL = new Box(3, 4, 5);
+        mirrorL.setMaterial(new PhongMaterial(bodyColor.darker()));
+        Box mirrorR = new Box(3, 4, 5);
+        mirrorR.setMaterial(new PhongMaterial(bodyColor.darker()));
+
+        java.util.List<javafx.scene.shape.Shape3D> wheels = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            Cylinder wheel = new Cylinder(8, 5);
+            wheel.setMaterial(wheelMat);
+            wheel.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
+            wheel.setRotate(90);
+            wheels.add(wheel);
+        }
+
+        Car3D car = new Car3D(vehicle, body, hood, trunk, cabin, windshield, headlightL, headlightR, sirenL, sirenR, mirrorL, mirrorR, wheels);
         car.setEmergency(true);
-        this.getChildren().addAll(body, cabin, windshield, headlightL, headlightR, sirenL, sirenR);
+        this.getChildren().addAll(body, hood, trunk, cabin, windshield, headlightL, headlightR, sirenL, sirenR, mirrorL, mirrorR);
+        this.getChildren().addAll(wheels);
 
         return car;
     }
@@ -315,10 +503,11 @@ public class CityEnvironment extends Group {
     }
 
     private void addModernBuilding(double x, double z, double w, double h, double d, Color baseColor) {
-        // Corps principal
+        // Poser les bâtiments sur le sol (y=65)
+        double y = 65 - h / 2;
         Box building = new Box(w, h, d);
         building.setTranslateX(x);
-        building.setTranslateY(92 - h / 2);
+        building.setTranslateY(y);
         building.setTranslateZ(z);
         building.setMaterial(new PhongMaterial(baseColor));
         this.getChildren().add(building);

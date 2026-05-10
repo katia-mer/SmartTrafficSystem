@@ -26,6 +26,7 @@ public class AnimationController3D {
     private final CityEnvironment environment;
     private static final double CAR_Y = 38;
     private final Random random = new Random();
+    private boolean nightMode = false;
 
     // Couleurs aléatoires pour les voitures
     private static final Color[][] CAR_COLORS = {
@@ -55,30 +56,33 @@ public class AnimationController3D {
 
         // ══ NOEUDS ══
         // Entrées (bord de carte)
-        Node wE = n(graph, "WE", -440, 25);
-        Node eE = n(graph, "EE", 440, -25);
-        Node nE = n(graph, "NE", -25, -440);
-        Node sE = n(graph, "SE", 25, 440);
+        Node wE = n(graph, "WE", -1500, 40);
+        Node eE = n(graph, "EE", 1500, -40);
+        Node nE = n(graph, "NE", -40, -1500);
+        Node sE = n(graph, "SE", 40, 1500);
 
         // Arrêts (avant intersection)
-        Node wS = n(graph, "WS", -80, 25);
-        Node eS = n(graph, "ES", 80, -25);
-        Node nS = n(graph, "NS", -25, -80);
-        Node sS = n(graph, "SS", 25, 80);
+        Node wS = n(graph, "WS", -90, 40);
+        Node eS = n(graph, "ES", 90, -40);
+        Node nS = n(graph, "NS", -40, -90);
+        Node sS = n(graph, "SS", 40, 90);
 
         // Sorties (bord opposé)
-        Node wX = n(graph, "WX", -440, -25);
-        Node eX = n(graph, "EX", 440, 25);
-        Node nX = n(graph, "NX", 25, -440);
-        Node sX = n(graph, "SX", -25, 440);
+        Node wX = n(graph, "WX", -1500, -40);
+        Node eX = n(graph, "EX", 1500, 40);
+        Node nX = n(graph, "NX", 40, -1500);
+        Node sX = n(graph, "SX", -40, 1500);
 
         // Coins de virage (dans l'intersection)
-        Node cWS = n(graph, "CWS", -25, 25);
-        Node cEN = n(graph, "CEN", 25, -25);
-        Node cNW = n(graph, "CNW", -25, -25);
-        Node cSE = n(graph, "CSE", 25, 25);
-        Node cWN = n(graph, "CWN", 25, 25);
-        Node cES = n(graph, "CES", -25, -25);
+        Node cWS = n(graph, "CWS", -40, 40);
+        Node cEN = n(graph, "CEN", 40, -40);
+        Node cNW = n(graph, "CNW", -40, -40);
+        Node cSE = n(graph, "CSE", 40, 40);
+        
+        Node cWN = n(graph, "CWN", 40, 40);
+        Node cES = n(graph, "CES", -40, -40);
+        Node cNE = n(graph, "CNE", 40, -40);
+        Node cSW = n(graph, "CSW", -40, 40);
 
         // ══ ROUTES (Edges) ══
         // Approches
@@ -102,11 +106,8 @@ public class AnimationController3D {
         // Virage à gauche
         e(graph, wS, cWN); e(graph, cWN, nX);    // W→N
         e(graph, eS, cES); e(graph, cES, sX);    // E→S
-        // Ajout des virages à gauche manquants pour N et S
-        Node cNE = n(graph, "CNE", 25, -25);      // N→E
-        Node cSW = n(graph, "CSW", -25, 25);      // S→W
-        e(graph, nS, cNE); e(graph, cNE, eX);    // N→E (virage à gauche)
-        e(graph, sS, cSW); e(graph, cSW, wX);    // S→W (virage à gauche)
+        e(graph, nS, cNE); e(graph, cNE, eX);    // N→E
+        e(graph, sS, cSW); e(graph, cSW, wX);    // S→W
 
         // ══ Enregistrer les nœuds d'entrée pour le spawn ══
         simulationEngine.addEntryNodeId("WE");
@@ -124,18 +125,11 @@ public class AnimationController3D {
         simulationEngine.addIntersection(nI);
         simulationEngine.addIntersection(sI);
 
-        // Feux: chaque feu fait face aux voitures qui arrivent et est placé sur le trottoir à DROITE
-        // W → Voitures venant de l'Ouest (roulant sur z > 0). Feu à droite (z = 75), avant l'intersection (x = -85)
-        trafficLights3D.add(environment.addTrafficLight(wI.getTrafficLight(), -85, 75, 180));
-        
-        // E → Voitures venant de l'Est (roulant sur z < 0). Feu à droite (z = -75), avant l'intersection (x = 85)
-        trafficLights3D.add(environment.addTrafficLight(eI.getTrafficLight(), 85, -75, 0));
-        
-        // N → Voitures venant du Nord (roulant sur x < 0). Feu à droite (x = -75), avant l'intersection (z = -85)
-        trafficLights3D.add(environment.addTrafficLight(nI.getTrafficLight(), -75, -85, 270));
-        
-        // S → Voitures venant du Sud (roulant sur x > 0). Feu à droite (x = 75), avant l'intersection (z = 85)
-        trafficLights3D.add(environment.addTrafficLight(sI.getTrafficLight(), 75, 85, 90));
+        // Feux: chaque feu face aux voitures (ajustés pour route 160)
+        trafficLights3D.add(environment.addTrafficLight(wI.getTrafficLight(), -95, 95, 180));
+        trafficLights3D.add(environment.addTrafficLight(eI.getTrafficLight(), 95, -95, 0));
+        trafficLights3D.add(environment.addTrafficLight(nI.getTrafficLight(), -95, -95, 270));
+        trafficLights3D.add(environment.addTrafficLight(sI.getTrafficLight(), 95, 95, 90));
 
         // ══ VÉHICULES INITIAUX ══
         car(wE, graph.getNeighbors("WE").get(0), 0.0, 0);
@@ -163,14 +157,22 @@ public class AnimationController3D {
         Color c1 = CAR_COLORS[colorIdx][0];
         Color c2 = CAR_COLORS[colorIdx][1];
 
-        Vehicle v = new Vehicle("V" + cars3DMap.size(), start, 90);
+        Vehicle v = new Vehicle("V" + cars3DMap.size(), start, 30);
         v.setCurrentEdge(init);
         v.setProgress(prog);
         v.setPreferredRouteIndex(route);
         simulationEngine.addVehicle(v);
 
         Car3D car3d = environment.addCar(v, c1, c2);
+        car3d.setNightMode(nightMode);
         cars3DMap.put(v.getId(), car3d);
+    }
+
+    public void setNightMode(boolean night) {
+        this.nightMode = night;
+        for (Car3D car : cars3DMap.values()) {
+            car.setNightMode(night);
+        }
     }
 
     // ══ CONTRÔLE ══
@@ -196,6 +198,7 @@ public class AnimationController3D {
 
         updateTrafficLights();
         updateCars3D(dt);
+        environment.updateRain(dt);
     }
 
     /** Synchronise la liste de voitures 3D avec le moteur de simulation */
@@ -212,6 +215,7 @@ public class AnimationController3D {
                     int colorIdx = random.nextInt(CAR_COLORS.length);
                     car3d = environment.addCar(v, CAR_COLORS[colorIdx][0], CAR_COLORS[colorIdx][1]);
                 }
+                car3d.setNightMode(nightMode);
                 cars3DMap.put(v.getId(), car3d);
             }
         }
@@ -248,10 +252,11 @@ public class AnimationController3D {
             }
             c.setPosition(v.getX(), CAR_Y, v.getY(), angle);
 
-            // Animation sirène
+            // Animation sirène et clignotants
             if (c.isEmergency()) {
                 c.updateSiren(dt);
             }
+            c.updateTurnSignals(dt);
         }
     }
 

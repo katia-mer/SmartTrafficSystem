@@ -11,6 +11,16 @@ public class Vehicle {
 
     // ── Identité ──────────────────────────────────────────
     private final String id;
+    
+    public enum VehicleType {
+        CAR, BUS, TRUCK, MOTO, BIKE
+    }
+    private VehicleType type = VehicleType.CAR;
+
+    public enum TurnSignal {
+        NONE, LEFT, RIGHT
+    }
+    private TurnSignal turnSignal = TurnSignal.NONE;
 
     // ── Vitesse (m/s) ─────────────────────────────────────
     private double speed;
@@ -45,6 +55,15 @@ public class Vehicle {
         this.stopped = false;
         this.currentEdge = null;
         this.emergency = false;
+        this.type = VehicleType.CAR;
+    }
+
+    public Vehicle(String id, Node startNode, double speed, VehicleType type) {
+        this(id, startNode, speed);
+        this.type = type;
+        // Ajuster la vitesse selon le type
+        if (type == VehicleType.MOTO) this.speed *= 1.2;
+        if (type == VehicleType.BUS || type == VehicleType.TRUCK) this.speed *= 0.8;
     }
 
     // ── Constructeur véhicule d'urgence ──────────────────
@@ -89,6 +108,8 @@ public class Vehicle {
     public double getWaitTime() { return waitTime; }
     public boolean isMarkedForRemoval() { return markedForRemoval; }
     public double getSpeedModifier() { return speedModifier; }
+    public VehicleType getType() { return type; }
+    public TurnSignal getTurnSignal() { return turnSignal; }
 
     // ── Setters ───────────────────────────────────────────
     public void setCurrentNode(Node currentNode) { this.currentNode = currentNode; }
@@ -108,6 +129,7 @@ public class Vehicle {
     public void setSpeed(double speed) { this.speed = speed; }
     public void setSpeedModifier(double modifier) { this.speedModifier = modifier; }
     public void setMarkedForRemoval(boolean marked) { this.markedForRemoval = marked; }
+    public void setTurnSignal(TurnSignal signal) { this.turnSignal = signal; }
 
     public void addWaitTime(double dt) { this.waitTime += dt; }
 

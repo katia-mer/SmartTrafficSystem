@@ -38,7 +38,10 @@ public class SimulationEngine {
     private int lastAction = 0;
 
     // ── Spawn dynamique ──
-    public enum TrafficLevel { LOW, MED, HIGH }
+    public enum TrafficLevel {
+        LOW, MED, HIGH
+    }
+
     private TrafficLevel trafficLevel = TrafficLevel.MED;
     private double spawnTimer = 0.0;
     private int maxCars = 40;
@@ -46,11 +49,21 @@ public class SimulationEngine {
 
     // Intervals de spawn (secondes)
     private double getSpawnInterval() {
+        double interval;
         switch (trafficLevel) {
-            case LOW: return rushHour ? 0.5 : 2.0;
-            case HIGH: return rushHour ? 0.15 : 0.4;
-            default: return rushHour ? 0.3 : 1.0;
+            case LOW:
+                interval = rushHour ? 0.5 : 2.0;
+                break;
+            case HIGH:
+                interval = rushHour ? 0.15 : 0.4;
+                break;
+            default:
+                interval = rushHour ? 0.3 : 1.0;
+                break;
         }
+        if (nightMode)
+            interval *= 2.5; // Beaucoup moins de voitures la nuit
+        return interval;
     }
 
     // ── Nœuds d'entrée pour spawn ──
@@ -78,56 +91,128 @@ public class SimulationEngine {
     private int waitingCountEW = 0;
 
     // ── Types d'urgence ──
-    public static final String[] EMERGENCY_TYPES = {"ambulance", "fire", "police", "rescue"};
-    public static final String[] EMERGENCY_LABELS = {"🚑 Ambulance", "🚒 Pompiers", "🚓 Police", "🚛 Secours"};
+    public static final String[] EMERGENCY_TYPES = { "ambulance", "fire", "police", "rescue" };
+    public static final String[] EMERGENCY_LABELS = { "🚑 Ambulance", "🚒 Pompiers", "🚓 Police", "🚛 Secours" };
 
     // ══════════════════════════════════════════════════════
-    //  SETTERS / GETTERS
+    // SETTERS / GETTERS
     // ══════════════════════════════════════════════════════
 
-    public void setGraph(Graph graph) { this.graph = graph; }
-    public Graph getGraph() { return graph; }
-    public void addVehicle(Vehicle v) { vehicles.add(v); }
-    public void addIntersection(Intersection intersection) { intersections.add(intersection); }
-    public List<Intersection> getIntersections() { return intersections; }
-    public List<Vehicle> getVehicles() { return vehicles; }
-    public Vehicle getActiveEmergency() { return activeEmergency; }
-    public void setActiveEmergency(Vehicle v) { this.activeEmergency = v; }
+    public void setGraph(Graph graph) {
+        this.graph = graph;
+    }
 
-    public void setTrafficLevel(TrafficLevel level) { this.trafficLevel = level; }
-    public TrafficLevel getTrafficLevel() { return trafficLevel; }
+    public Graph getGraph() {
+        return graph;
+    }
 
-    public boolean isRainMode() { return rainMode; }
-    public boolean isNightMode() { return nightMode; }
-    public boolean isRushHour() { return rushHour; }
+    public void addVehicle(Vehicle v) {
+        vehicles.add(v);
+    }
 
-    public TrafficLight.State getNsState() { return nsState; }
-    public TrafficLight.State getEwState() { return ewState; }
+    public void addIntersection(Intersection intersection) {
+        intersections.add(intersection);
+    }
 
-    public double getAvgWaitNS() { return waitingCountNS > 0 ? totalWaitNS / waitingCountNS : 0; }
-    public double getAvgWaitEW() { return waitingCountEW > 0 ? totalWaitEW / waitingCountEW : 0; }
-    public int getWaitingCountNS() { return waitingCountNS; }
-    public int getWaitingCountEW() { return waitingCountEW; }
-    public List<String> getAiLog() { return aiLog; }
+    public List<Intersection> getIntersections() {
+        return intersections;
+    }
 
-    public void addEntryNodeId(String nodeId) { entryNodeIds.add(nodeId); }
+    public List<Vehicle> getVehicles() {
+        return vehicles;
+    }
+
+    public Vehicle getActiveEmergency() {
+        return activeEmergency;
+    }
+
+    public void setActiveEmergency(Vehicle v) {
+        this.activeEmergency = v;
+    }
+
+    public void setTrafficLevel(TrafficLevel level) {
+        this.trafficLevel = level;
+    }
+
+    public TrafficLevel getTrafficLevel() {
+        return trafficLevel;
+    }
+
+    public boolean isRainMode() {
+        return rainMode;
+    }
+
+    public boolean isNightMode() {
+        return nightMode;
+    }
+
+    public boolean isRushHour() {
+        return rushHour;
+    }
+
+    public TrafficLight.State getNsState() {
+        return nsState;
+    }
+
+    public TrafficLight.State getEwState() {
+        return ewState;
+    }
+
+    public double getAvgWaitNS() {
+        return waitingCountNS > 0 ? totalWaitNS / waitingCountNS : 0;
+    }
+
+    public double getAvgWaitEW() {
+        return waitingCountEW > 0 ? totalWaitEW / waitingCountEW : 0;
+    }
+
+    public int getWaitingCountNS() {
+        return waitingCountNS;
+    }
+
+    public int getWaitingCountEW() {
+        return waitingCountEW;
+    }
+
+    public List<String> getAiLog() {
+        return aiLog;
+    }
+
+    public void addEntryNodeId(String nodeId) {
+        entryNodeIds.add(nodeId);
+    }
 
     // ══════════════════════════════════════════════════════
-    //  MODES SPÉCIAUX
+    // MODES SPÉCIAUX
     // ══════════════════════════════════════════════════════
 
     public void setRainMode(boolean rain) {
         this.rainMode = rain;
-        double modifier = rain ? 0.6 : 1.0;
-        for (Vehicle v : vehicles) {
-            if (!v.isEmergency()) v.setSpeedModifier(modifier);
-        }
-        logAI(rain ? "🌧️ Mode Pluie activé — Vitesse réduite" : "☀️ Mode Pluie désactivé");
+        updateAllVehicleSpeeds();
+        logAI(rain ? "🌧️ Mode Pluie — Vitesse réduite & Orange allongé" : "☀️ Mode Pluie désactivé");
     }
 
     public void setNightMode(boolean night) {
         this.nightMode = night;
-        logAI(night ? "🌙 Mode Nuit activé — Visibilité réduite" : "☀️ Mode Jour restauré");
+        updateAllVehicleSpeeds();
+        logAI(night ? "🌙 Mode Nuit — Cycles de feux courts" : "☀️ Mode Jour restauré");
+    }
+
+    private void updateAllVehicleSpeeds() {
+        double modifier = calculateTotalModifier();
+        for (Vehicle v : vehicles) {
+            if (!v.isEmergency())
+                v.setSpeedModifier(modifier);
+        }
+    }
+
+    private double calculateTotalModifier() {
+        double modifier = 1.0;
+        if (rainMode)
+            modifier *= 0.65; // Pluie = -35% vitesse
+        if (nightMode)
+            modifier *= 0.85; // Nuit = -15% vitesse
+        return modifier;
     }
 
     public void setRushHour(boolean rush) {
@@ -137,7 +222,7 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  MODE IA
+    // MODE IA
     // ══════════════════════════════════════════════════════
 
     public void setAiMode(boolean aiMode) {
@@ -151,11 +236,16 @@ public class SimulationEngine {
         logAI(aiMode ? "🤖 IA Q-Learning activée" : "⭕ IA désactivée — Timer classique");
     }
 
-    public boolean isAiMode() { return aiMode; }
-    public QLearningAgent getAgent() { return agent; }
+    public boolean isAiMode() {
+        return aiMode;
+    }
+
+    public QLearningAgent getAgent() {
+        return agent;
+    }
 
     // ══════════════════════════════════════════════════════
-    //  MISE À JOUR PRINCIPALE
+    // MISE À JOUR PRINCIPALE
     // ══════════════════════════════════════════════════════
 
     public void update(double deltaTime) {
@@ -180,11 +270,24 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  CONTRÔLEUR FRANÇAIS 8 PHASES
+    // CONTRÔLEUR FRANÇAIS 8 PHASES
     // ══════════════════════════════════════════════════════
 
     private void updateFrenchController(double deltaTime) {
-        controllerTimer -= deltaTime;
+        // Logique adaptative : si une rue est très chargée, on accélère le passage au vert
+        double timeMultiplier = 1.0;
+        
+        if (nsState == TrafficLight.State.RED && waitingCountNS > waitingCountEW + 2) {
+            timeMultiplier = 1.5 + (waitingCountNS * 0.1); // Plus il y a de monde, plus ça va vite
+        } else if (ewState == TrafficLight.State.RED && waitingCountEW > waitingCountNS + 2) {
+            timeMultiplier = 1.5 + (waitingCountEW * 0.1);
+        }
+        
+        // Limiter le multiplicateur pour garder un minimum de réalisme
+        timeMultiplier = Math.min(timeMultiplier, 4.0);
+
+        controllerTimer -= (deltaTime * timeMultiplier);
+        
         if (controllerTimer <= 0) {
             nextControllerPhase();
         }
@@ -194,15 +297,55 @@ public class SimulationEngine {
     private void nextControllerPhase() {
         controllerPhase = (controllerPhase + 1) % 8;
 
+        // --- Logique de Durée Dynamique ---
+        // Nuit : cycles courts car moins de monde
+        // Pluie : orange plus long (freinage) et sécurité accrue
+        double greenDuration = nightMode ? 5.0 : 10.0;
+        double yellowDuration = rainMode ? 4.5 : 3.0;   // Plus long sous la pluie pour le freinage
+        double allRedDuration = rainMode ? 2.5 : 1.0;   // Plus de sécurité pour vider l'intersection
+        double redYellowDuration = 2.0;
+
         switch (controllerPhase) {
-            case 0: nsState = TrafficLight.State.GREEN;      ewState = TrafficLight.State.RED;        controllerTimer = 10.0; break;
-            case 1: nsState = TrafficLight.State.YELLOW;     ewState = TrafficLight.State.RED;        controllerTimer = 3.0;  break;
-            case 2: nsState = TrafficLight.State.RED;        ewState = TrafficLight.State.RED;        controllerTimer = 1.0;  break;
-            case 3: nsState = TrafficLight.State.RED;        ewState = TrafficLight.State.RED_YELLOW;  controllerTimer = 2.0;  break;
-            case 4: nsState = TrafficLight.State.RED;        ewState = TrafficLight.State.GREEN;      controllerTimer = 10.0; break;
-            case 5: nsState = TrafficLight.State.RED;        ewState = TrafficLight.State.YELLOW;     controllerTimer = 3.0;  break;
-            case 6: nsState = TrafficLight.State.RED;        ewState = TrafficLight.State.RED;        controllerTimer = 1.0;  break;
-            case 7: nsState = TrafficLight.State.RED_YELLOW;  ewState = TrafficLight.State.RED;        controllerTimer = 2.0;  break;
+            case 0:
+                nsState = TrafficLight.State.GREEN;
+                ewState = TrafficLight.State.RED;
+                controllerTimer = greenDuration;
+                break;
+            case 1:
+                nsState = TrafficLight.State.YELLOW;
+                ewState = TrafficLight.State.RED;
+                controllerTimer = yellowDuration;
+                break;
+            case 2:
+                nsState = TrafficLight.State.RED;
+                ewState = TrafficLight.State.RED;
+                controllerTimer = allRedDuration;
+                break;
+            case 3:
+                nsState = TrafficLight.State.RED;
+                ewState = TrafficLight.State.RED_YELLOW;
+                controllerTimer = redYellowDuration;
+                break;
+            case 4:
+                nsState = TrafficLight.State.RED;
+                ewState = TrafficLight.State.GREEN;
+                controllerTimer = greenDuration;
+                break;
+            case 5:
+                nsState = TrafficLight.State.RED;
+                ewState = TrafficLight.State.YELLOW;
+                controllerTimer = yellowDuration;
+                break;
+            case 6:
+                nsState = TrafficLight.State.RED;
+                ewState = TrafficLight.State.RED;
+                controllerTimer = allRedDuration;
+                break;
+            case 7:
+                nsState = TrafficLight.State.RED_YELLOW;
+                ewState = TrafficLight.State.RED;
+                controllerTimer = redYellowDuration;
+                break;
         }
     }
 
@@ -247,11 +390,12 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  SPAWN DYNAMIQUE
+    // SPAWN DYNAMIQUE
     // ══════════════════════════════════════════════════════
 
     private void updateSpawn(double deltaTime) {
-        if (entryNodeIds.isEmpty() || graph == null) return;
+        if (entryNodeIds.isEmpty() || graph == null)
+            return;
 
         spawnTimer += deltaTime;
         double interval = getSpawnInterval();
@@ -263,14 +407,17 @@ public class SimulationEngine {
     }
 
     private void spawnVehicle() {
-        if (entryNodeIds.isEmpty()) return;
+        if (entryNodeIds.isEmpty())
+            return;
 
         String entryId = entryNodeIds.get(random.nextInt(entryNodeIds.size()));
         Node entryNode = graph.getNode(entryId);
-        if (entryNode == null) return;
+        if (entryNode == null)
+            return;
 
         List<Edge> edges = graph.getNeighbors(entryId);
-        if (edges.isEmpty()) return;
+        if (edges.isEmpty())
+            return;
 
         // Vérifier qu'il n'y a pas de voiture trop proche de l'entrée
         for (Vehicle v : vehicles) {
@@ -281,30 +428,52 @@ public class SimulationEngine {
             }
         }
 
-        int routeIdx = random.nextInt(Math.min(3, edges.size())); // Aléatoire parmi les routes
-        double speed = 70 + random.nextInt(40); // 70-110
+        double speed = 25 + random.nextInt(15); // 25-40
 
         Vehicle v = new Vehicle("V" + (vehicleIdCounter++), entryNode, speed);
         v.setCurrentEdge(edges.get(0));
         v.setProgress(0.0);
-        v.setPreferredRouteIndex(routeIdx < edges.size() ? routeIdx : 0);
+        v.setPreferredRouteIndex(0); // Toujours tout droit comme avant
 
-        if (rainMode) v.setSpeedModifier(0.6);
+        v.setSpeedModifier(calculateTotalModifier());
 
         vehicles.add(v);
     }
 
+    public void spawnVehicleWithType(Vehicle.VehicleType type) {
+        if (entryNodeIds.isEmpty() || graph == null) return;
+        
+        String entryId = entryNodeIds.get(random.nextInt(entryNodeIds.size()));
+        Node entryNode = graph.getNode(entryId);
+        List<Edge> edges = graph.getNeighbors(entryId);
+        if (edges.isEmpty()) return;
+
+        double speed = 25 + random.nextInt(15);
+        Vehicle v = new Vehicle("V" + (vehicleIdCounter++), entryNode, speed, type);
+        v.setCurrentEdge(edges.get(0));
+        v.setProgress(0.0);
+        v.setPreferredRouteIndex(0);
+        v.setSpeedModifier(calculateTotalModifier());
+
+        vehicles.add(v);
+        logAI("➕ Nouveau " + type + " lancé (" + entryId + ")");
+    }
+
     /** Spawn un véhicule d'urgence sur une direction aléatoire */
     public Vehicle spawnEmergencyVehicle() {
-        if (activeEmergency != null) return null;
-        if (entryNodeIds.isEmpty()) return null;
+        if (activeEmergency != null)
+            return null;
+        if (entryNodeIds.isEmpty())
+            return null;
 
         String entryId = entryNodeIds.get(random.nextInt(entryNodeIds.size()));
         Node entryNode = graph.getNode(entryId);
-        if (entryNode == null) return null;
+        if (entryNode == null)
+            return null;
 
         List<Edge> edges = graph.getNeighbors(entryId);
-        if (edges.isEmpty()) return null;
+        if (edges.isEmpty())
+            return null;
 
         String emType = EMERGENCY_TYPES[random.nextInt(EMERGENCY_TYPES.length)];
         String emLabel = EMERGENCY_LABELS[java.util.Arrays.asList(EMERGENCY_TYPES).indexOf(emType)];
@@ -312,15 +481,17 @@ public class SimulationEngine {
         Vehicle em = new Vehicle("EM" + (vehicleIdCounter++), entryNode, 120, emType);
         em.setCurrentEdge(edges.get(0));
         em.setProgress(0.0);
-        em.setPreferredRouteIndex(0); // Tout droit
+        em.setPreferredRouteIndex(0);
 
         vehicles.add(em);
         activeEmergency = em;
 
         // Forcer le vert pour la direction de l'urgence
         boolean isNS = entryId.startsWith("N") || entryId.startsWith("S");
-        if (isNS) forceGreenNS();
-        else forceGreenEW();
+        if (isNS)
+            forceGreenNS();
+        else
+            forceGreenEW();
 
         logAI("🚨 ALERTE: " + emLabel + " lancé! Direction " + entryId);
         return em;
@@ -329,10 +500,15 @@ public class SimulationEngine {
     /** Spawn une double urgence séquentielle */
     public void spawnDoubleEmergency() {
         spawnEmergencyVehicle();
+        // On lance une deuxième urgence après 2 secondes
+        new Thread(() -> {
+            try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            javafx.application.Platform.runLater(this::spawnEmergencyVehicle);
+        }).start();
     }
 
     // ══════════════════════════════════════════════════════
-    //  IA Q-LEARNING
+    // IA Q-LEARNING
     // ══════════════════════════════════════════════════════
 
     private void updateAI(double deltaTime) {
@@ -369,65 +545,73 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  DÉPLACEMENT DES VÉHICULES (avec distance de sécurité)
+    // DÉPLACEMENT DES VÉHICULES (avec distance de sécurité)
     // ══════════════════════════════════════════════════════
 
-    /** Distance de sécurité minimale (en unités de progress, 0-1) */
-    private static final double SAFE_DISTANCE = 0.12;
+    /** Distance de sécurité minimale en unités absolues */
+    public double getSafeDistance(Edge edge) {
+        if (edge == null) return 0.1;
+        // Une voiture fait environ 60 unités de long (du pare-chocs avant au pare-chocs arrière).
+        // 90 unités = 1 voiture + 30 unités d'espace (environ une demi-voiture d'espace)
+        double minGap = rainMode ? 120.0 : 90.0; 
+        return minGap / edge.getLength();
+    }
 
     private void moveVehicles(double deltaTime) {
         for (Vehicle v : vehicles) {
-            if (v.getCurrentEdge() == null) continue;
+            if (v.getCurrentEdge() == null)
+                continue;
 
-            // 1. Vérifier le feu rouge
+            // 1. Vérifier le feu
             Intersection destIntersection = findIntersectionByNode(v.getCurrentEdge().getDestination());
-            boolean feuRouge = destIntersection != null
-                    && !destIntersection.getTrafficLight().canPass();
-            if (v.isEmergency()) feuRouge = false;
+            TrafficLight light = (destIntersection != null) ? destIntersection.getTrafficLight() : null;
+            
+            boolean isRed = light != null && (light.isRed() || light.isRedYellow());
+            boolean isYellow = light != null && light.isYellow();
+            
+            if (v.isEmergency()) {
+                isRed = false;
+                isYellow = false;
+            }
 
             double progress = v.getProgress();
             double effectiveSpeed = v.getEffectiveSpeed();
 
-            // 2. Trouver la voiture devant sur la même arête
-            double distToCarAhead = findDistanceToCarAhead(v);
-
-            // 3. Calculer la progression maximale autorisée
-            double maxProgress;
-
-            if (feuRouge && progress < 1.0) {
-                // Feu rouge → ne pas dépasser 1.0
-                maxProgress = 0.98;
-            } else {
-                maxProgress = Double.MAX_VALUE;
+            // Ralentir à l'orange si on approche de l'intersection
+            if (isYellow && progress > 0.65) {
+                effectiveSpeed *= 0.5;
             }
 
-            // 4. Limiter par la voiture devant (distance de sécurité)
-            if (distToCarAhead < SAFE_DISTANCE * 2) {
+            // 2. Trouver la voiture devant
+            double distToCarAhead = findDistanceToCarAhead(v);
+            double safeDist = getSafeDistance(v.getCurrentEdge());
+            // 3. Limiter par la voiture devant (distance de sécurité)
+            if (distToCarAhead < safeDist * 2) {
                 // Trop proche → ralentir ou s'arrêter
-                if (distToCarAhead <= SAFE_DISTANCE) {
+                if (distToCarAhead <= safeDist) {
                     v.setStopped(true);
                     v.addWaitTime(deltaTime);
                     continue; // Ne pas bouger du tout
                 }
                 // Ralentir proportionnellement à la distance
-                double slowFactor = (distToCarAhead - SAFE_DISTANCE) / SAFE_DISTANCE;
+                double slowFactor = (distToCarAhead - safeDist) / safeDist;
                 effectiveSpeed *= Math.max(0.1, slowFactor);
             }
 
             double nextProgress = progress + (effectiveSpeed * deltaTime) / 100.0;
 
-            // 5. Arrêter au feu rouge
-            if (feuRouge && progress < 0.98 && nextProgress >= 0.98) {
+            // 4. Arrêter au feu rouge (rester arrêté tant que c'est rouge)
+            if (isRed && progress <= 0.96 && nextProgress >= 0.96) {
                 v.setStopped(true);
-                v.setProgress(0.98);
+                v.setProgress(0.96);
                 v.addWaitTime(deltaTime);
                 continue;
             }
 
             // 6. Limiter par la voiture devant
             if (distToCarAhead < Double.MAX_VALUE) {
-                double carAheadProgress = getCarAheadProgress(v);
-                double maxAllowed = carAheadProgress - SAFE_DISTANCE;
+                double safeDistVal = getSafeDistance(v.getCurrentEdge());
+                double maxAllowed = v.getProgress() + (distToCarAhead - safeDistVal);
                 if (nextProgress > maxAllowed && nextProgress < 1.0) {
                     nextProgress = Math.max(progress, maxAllowed);
                     if (nextProgress <= progress) {
@@ -469,20 +653,40 @@ public class SimulationEngine {
         }
     }
 
-    /** Trouve la distance (en progress) à la voiture la plus proche devant sur la même arête */
+    /**
+     * Trouve la distance (en progress) à la voiture la plus proche devant sur la
+     * même arête
+     */
     private double findDistanceToCarAhead(Vehicle current) {
         Edge currentEdge = current.getCurrentEdge();
-        if (currentEdge == null) return Double.MAX_VALUE;
-
+        if (currentEdge == null)
+            return Double.MAX_VALUE;
+ 
         double minDist = Double.MAX_VALUE;
         for (Vehicle other : vehicles) {
-            if (other == current) continue;
-            if (other.getCurrentEdge() == null) continue;
-
-            // Même arête et devant
-            if (other.getCurrentEdge() == currentEdge && other.getProgress() > current.getProgress()) {
+            if (other == current || other.getCurrentEdge() == null)
+                continue;
+ 
+            Edge otherEdge = other.getCurrentEdge();
+ 
+            // Cas 1 : Même arête et devant
+            if (otherEdge == currentEdge && other.getProgress() > current.getProgress()) {
                 double dist = other.getProgress() - current.getProgress();
-                if (dist < minDist) minDist = dist;
+                if (dist < minDist)
+                    minDist = dist;
+            }
+            
+            // Cas 2 : La voiture est déjà sur l'arête suivante (intersection)
+            // On vérifie si la destination de notre arête est le départ de l'arête de l'autre
+            else if (currentEdge.getDestination().equals(otherEdge.getSource())) {
+                // On calcule la distance combinée en unités de "progress" de l'arête actuelle
+                // dist = (ce qu'il reste sur l'arête A) + (ce qui est déjà parcouru sur l'arête B, converti)
+                double remainingA = 1.0 - current.getProgress();
+                double progressB_in_A = (other.getProgress() * otherEdge.getLength()) / currentEdge.getLength();
+                double totalDist = remainingA + progressB_in_A;
+                
+                if (totalDist < minDist)
+                    minDist = totalDist;
             }
         }
         return minDist;
@@ -491,12 +695,14 @@ public class SimulationEngine {
     /** Récupère la progress de la voiture la plus proche devant */
     private double getCarAheadProgress(Vehicle current) {
         Edge currentEdge = current.getCurrentEdge();
-        if (currentEdge == null) return Double.MAX_VALUE;
+        if (currentEdge == null)
+            return Double.MAX_VALUE;
 
         double closestProgress = Double.MAX_VALUE;
         double closestDist = Double.MAX_VALUE;
         for (Vehicle other : vehicles) {
-            if (other == current || other.getCurrentEdge() == null) continue;
+            if (other == current || other.getCurrentEdge() == null)
+                continue;
             if (other.getCurrentEdge() == currentEdge && other.getProgress() > current.getProgress()) {
                 double dist = other.getProgress() - current.getProgress();
                 if (dist < closestDist) {
@@ -509,7 +715,7 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  MÉTRIQUES
+    // MÉTRIQUES
     // ══════════════════════════════════════════════════════
 
     private void updateMetrics(double deltaTime) {
@@ -519,9 +725,11 @@ public class SimulationEngine {
         totalWaitEW = 0;
 
         for (Vehicle v : vehicles) {
-            if (v.isEmergency()) continue;
+            if (v.isEmergency())
+                continue;
             if (v.isStopped() || v.getProgress() >= 0.8) {
-                if (v.getCurrentEdge() == null) continue;
+                if (v.getCurrentEdge() == null)
+                    continue;
                 String edgeId = v.getCurrentEdge().getSource().getId();
                 if (edgeId.startsWith("N") || edgeId.startsWith("S")) {
                     waitingCountNS++;
@@ -535,7 +743,7 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  NETTOYAGE
+    // NETTOYAGE
     // ══════════════════════════════════════════════════════
 
     private void cleanupVehicles() {
@@ -552,12 +760,13 @@ public class SimulationEngine {
     }
 
     // ══════════════════════════════════════════════════════
-    //  UTILITAIRES
+    // UTILITAIRES
     // ══════════════════════════════════════════════════════
 
     private Intersection findIntersectionByNode(Node node) {
         for (Intersection intersection : intersections) {
-            if (intersection.getNode().equals(node)) return intersection;
+            if (intersection.getNode().equals(node))
+                return intersection;
         }
         return null;
     }
@@ -565,7 +774,8 @@ public class SimulationEngine {
     public void logAI(String message) {
         String timestamp = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
         aiLog.add(0, "[" + timestamp + "] " + message);
-        if (aiLog.size() > 15) aiLog.remove(aiLog.size() - 1);
+        if (aiLog.size() > 15)
+            aiLog.remove(aiLog.size() - 1);
     }
 
     /** Réinitialisation complète */
@@ -583,7 +793,8 @@ public class SimulationEngine {
         nsState = TrafficLight.State.GREEN;
         ewState = TrafficLight.State.RED;
         aiLog.clear();
-        if (agent != null) agent.reset();
+        if (agent != null)
+            agent.reset();
         logAI("↻ Simulation réinitialisée");
     }
 }
