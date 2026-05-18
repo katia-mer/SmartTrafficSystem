@@ -274,20 +274,21 @@ public class SimulationEngine {
     // ══════════════════════════════════════════════════════
 
     private void updateFrenchController(double deltaTime) {
-        // Logique adaptative : si une rue est très chargée, on accélère le passage au vert
+        // Logique adaptative : si une rue est très chargée, on accélère le passage au
+        // vert
         double timeMultiplier = 1.0;
-        
+
         if (nsState == TrafficLight.State.RED && waitingCountNS > waitingCountEW + 2) {
             timeMultiplier = 1.5 + (waitingCountNS * 0.1); // Plus il y a de monde, plus ça va vite
         } else if (ewState == TrafficLight.State.RED && waitingCountEW > waitingCountNS + 2) {
             timeMultiplier = 1.5 + (waitingCountEW * 0.1);
         }
-        
+
         // Limiter le multiplicateur pour garder un minimum de réalisme
         timeMultiplier = Math.min(timeMultiplier, 4.0);
 
         controllerTimer -= (deltaTime * timeMultiplier);
-        
+
         if (controllerTimer <= 0) {
             nextControllerPhase();
         }
@@ -301,8 +302,8 @@ public class SimulationEngine {
         // Nuit : cycles courts car moins de monde
         // Pluie : orange plus long (freinage) et sécurité accrue
         double greenDuration = nightMode ? 5.0 : 10.0;
-        double yellowDuration = rainMode ? 4.5 : 3.0;   // Plus long sous la pluie pour le freinage
-        double allRedDuration = rainMode ? 2.5 : 1.0;   // Plus de sécurité pour vider l'intersection
+        double yellowDuration = rainMode ? 4.5 : 3.0; // Plus long sous la pluie pour le freinage
+        double allRedDuration = rainMode ? 2.5 : 1.0; // Plus de sécurité pour vider l'intersection
         double redYellowDuration = 2.0;
 
         switch (controllerPhase) {
@@ -441,12 +442,14 @@ public class SimulationEngine {
     }
 
     public void spawnVehicleWithType(Vehicle.VehicleType type) {
-        if (entryNodeIds.isEmpty() || graph == null) return;
-        
+        if (entryNodeIds.isEmpty() || graph == null)
+            return;
+
         String entryId = entryNodeIds.get(random.nextInt(entryNodeIds.size()));
         Node entryNode = graph.getNode(entryId);
         List<Edge> edges = graph.getNeighbors(entryId);
-        if (edges.isEmpty()) return;
+        if (edges.isEmpty())
+            return;
 
         double speed = 25 + random.nextInt(15);
         Vehicle v = new Vehicle("V" + (vehicleIdCounter++), entryNode, speed, type);
@@ -502,7 +505,11 @@ public class SimulationEngine {
         spawnEmergencyVehicle();
         // On lance une deuxième urgence après 2 secondes
         new Thread(() -> {
-            try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             javafx.application.Platform.runLater(this::spawnEmergencyVehicle);
         }).start();
     }
@@ -529,7 +536,7 @@ public class SimulationEngine {
             lastState = currentState;
             lastAction = action;
 
-            logAI("🤖 IA: " + agent.getLastDecisionReason());
+            logAI("IA: " + agent.getLastDecisionReason());
         }
     }
 
@@ -550,10 +557,13 @@ public class SimulationEngine {
 
     /** Distance de sécurité minimale en unités absolues */
     public double getSafeDistance(Edge edge) {
-        if (edge == null) return 0.1;
-        // Une voiture fait environ 60 unités de long (du pare-chocs avant au pare-chocs arrière).
-        // 90 unités = 1 voiture + 30 unités d'espace (environ une demi-voiture d'espace)
-        double minGap = rainMode ? 120.0 : 90.0; 
+        if (edge == null)
+            return 0.1;
+        // Une voiture fait environ 60 unités de long (du pare-chocs avant au pare-chocs
+        // arrière).
+        // 90 unités = 1 voiture + 30 unités d'espace (environ une demi-voiture
+        // d'espace)
+        double minGap = rainMode ? 120.0 : 90.0;
         return minGap / edge.getLength();
     }
 
@@ -565,10 +575,10 @@ public class SimulationEngine {
             // 1. Vérifier le feu
             Intersection destIntersection = findIntersectionByNode(v.getCurrentEdge().getDestination());
             TrafficLight light = (destIntersection != null) ? destIntersection.getTrafficLight() : null;
-            
+
             boolean isRed = light != null && (light.isRed() || light.isRedYellow());
             boolean isYellow = light != null && light.isYellow();
-            
+
             if (v.isEmergency()) {
                 isRed = false;
                 isYellow = false;
@@ -661,30 +671,32 @@ public class SimulationEngine {
         Edge currentEdge = current.getCurrentEdge();
         if (currentEdge == null)
             return Double.MAX_VALUE;
- 
+
         double minDist = Double.MAX_VALUE;
         for (Vehicle other : vehicles) {
             if (other == current || other.getCurrentEdge() == null)
                 continue;
- 
+
             Edge otherEdge = other.getCurrentEdge();
- 
+
             // Cas 1 : Même arête et devant
             if (otherEdge == currentEdge && other.getProgress() > current.getProgress()) {
                 double dist = other.getProgress() - current.getProgress();
                 if (dist < minDist)
                     minDist = dist;
             }
-            
+
             // Cas 2 : La voiture est déjà sur l'arête suivante (intersection)
-            // On vérifie si la destination de notre arête est le départ de l'arête de l'autre
+            // On vérifie si la destination de notre arête est le départ de l'arête de
+            // l'autre
             else if (currentEdge.getDestination().equals(otherEdge.getSource())) {
                 // On calcule la distance combinée en unités de "progress" de l'arête actuelle
-                // dist = (ce qu'il reste sur l'arête A) + (ce qui est déjà parcouru sur l'arête B, converti)
+                // dist = (ce qu'il reste sur l'arête A) + (ce qui est déjà parcouru sur l'arête
+                // B, converti)
                 double remainingA = 1.0 - current.getProgress();
                 double progressB_in_A = (other.getProgress() * otherEdge.getLength()) / currentEdge.getLength();
                 double totalDist = remainingA + progressB_in_A;
-                
+
                 if (totalDist < minDist)
                     minDist = totalDist;
             }
