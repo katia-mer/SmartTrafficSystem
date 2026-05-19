@@ -274,14 +274,19 @@ public class SimulationEngine {
     // ══════════════════════════════════════════════════════
 
     private void updateFrenchController(double deltaTime) {
-        // Logique adaptative : si une rue est très chargée, on accélère le passage au
-        // vert
+        // Logique adaptative sécurisée : on n'accélère le cycle QUE lors des phases au VERT
+        // pour résorber l'attente sur l'axe opposé, garantissant ainsi que les phases orange
+        // et tout-rouge durent toujours leur temps normal de sécurité.
         double timeMultiplier = 1.0;
 
-        if (nsState == TrafficLight.State.RED && waitingCountNS > waitingCountEW + 2) {
-            timeMultiplier = 1.5 + (waitingCountNS * 0.1); // Plus il y a de monde, plus ça va vite
-        } else if (ewState == TrafficLight.State.RED && waitingCountEW > waitingCountNS + 2) {
-            timeMultiplier = 1.5 + (waitingCountEW * 0.1);
+        if (controllerPhase == 0) { // NS est VERT (E/O attend au ROUGE)
+            if (waitingCountEW > waitingCountNS + 2) {
+                timeMultiplier = 1.5 + (waitingCountEW * 0.1); // Accélère la fin du vert NS
+            }
+        } else if (controllerPhase == 4) { // E/O est VERT (N/S attend au ROUGE)
+            if (waitingCountNS > waitingCountEW + 2) {
+                timeMultiplier = 1.5 + (waitingCountNS * 0.1); // Accélère la fin du vert EW
+            }
         }
 
         // Limiter le multiplicateur pour garder un minimum de réalisme
