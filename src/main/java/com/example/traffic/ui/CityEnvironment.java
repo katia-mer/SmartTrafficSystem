@@ -328,14 +328,10 @@ public class CityEnvironment extends Group {
         Box mirrorR = new Box(2, 3, 4);
         mirrorR.setMaterial(mirrorMat);
 
-        // Roues
-        java.util.List<javafx.scene.shape.Shape3D> wheels = new java.util.ArrayList<>();
+        // Roues avec jantes chromées premium
+        java.util.List<javafx.scene.Node> wheels = new java.util.ArrayList<>();
         for (int i = 0; i < 4; i++) {
-            Cylinder wheel = new Cylinder(7, 4);
-            wheel.setMaterial(wheelMat);
-            wheel.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
-            wheel.setRotate(90);
-            wheels.add(wheel);
+            wheels.add(createBeautifulWheel(7, 4, Color.rgb(25, 25, 25), Color.rgb(200, 200, 200)));
         }
 
         Car3D car = new Car3D(vehicle, body, hood, trunk, cabin, windshield, headlightL, headlightR, taillightL, taillightR, mirrorL, mirrorR, wheels);
@@ -388,15 +384,10 @@ public class CityEnvironment extends Group {
         Box mirrorR = new Box(1, 1, 6);
         mirrorR.setMaterial(ledMat);
 
-        java.util.List<javafx.scene.shape.Shape3D> wheels = new java.util.ArrayList<>();
-        PhongMaterial wheelMat = new PhongMaterial(Color.rgb(10, 10, 10));
-        wheelMat.setSpecularColor(neonBlue);
+        // Roues néon futuristes
+        java.util.List<javafx.scene.Node> wheels = new java.util.ArrayList<>();
         for (int i = 0; i < 4; i++) {
-            Cylinder wheel = new Cylinder(7, 3);
-            wheel.setMaterial(wheelMat);
-            wheel.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
-            wheel.setRotate(90);
-            wheels.add(wheel);
+            wheels.add(createBeautifulWheel(7, 3, Color.rgb(10, 10, 10), neonBlue));
         }
 
         Car3D car = new Car3D(vehicle, body, hood, trunk, cabin, windshield, ledL, ledR, tailLedL, tailLedR, mirrorL, mirrorR, wheels);
@@ -446,13 +437,10 @@ public class CityEnvironment extends Group {
         Box mirrorR = new Box(3, 4, 5);
         mirrorR.setMaterial(new PhongMaterial(bodyColor.darker()));
 
-        java.util.List<javafx.scene.shape.Shape3D> wheels = new java.util.ArrayList<>();
+        // Roues robustes d'urgence
+        java.util.List<javafx.scene.Node> wheels = new java.util.ArrayList<>();
         for (int i = 0; i < 4; i++) {
-            Cylinder wheel = new Cylinder(8, 5);
-            wheel.setMaterial(wheelMat);
-            wheel.setRotationAxis(javafx.scene.transform.Rotate.X_AXIS);
-            wheel.setRotate(90);
-            wheels.add(wheel);
+            wheels.add(createBeautifulWheel(8, 5, Color.rgb(15, 15, 15), Color.SILVER));
         }
 
         Car3D car = new Car3D(vehicle, body, hood, trunk, cabin, windshield, headlightL, headlightR, sirenL, sirenR, mirrorL, mirrorR, wheels);
@@ -468,6 +456,25 @@ public class CityEnvironment extends Group {
         for (javafx.scene.Node part : car.getAllPartsAsList()) {
             this.getChildren().remove(part);
         }
+    }
+
+    private Group createBeautifulWheel(double radius, double width, Color tireColor, Color rimColor) {
+        Group wheelGroup = new Group();
+        
+        // Pneu (Tire)
+        Cylinder tire = new Cylinder(radius, width);
+        PhongMaterial tireMat = new PhongMaterial(tireColor);
+        tire.setMaterial(tireMat);
+        
+        // Jante (Rim/Hubcap)
+        Cylinder rim = new Cylinder(radius * 0.55, width + 0.4);
+        PhongMaterial rimMat = new PhongMaterial(rimColor);
+        rimMat.setSpecularColor(Color.WHITE);
+        rimMat.setSpecularPower(40);
+        rim.setMaterial(rimMat);
+        
+        wheelGroup.getChildren().addAll(tire, rim);
+        return wheelGroup;
     }
 
     private Color getEmergencyColor(String type) {

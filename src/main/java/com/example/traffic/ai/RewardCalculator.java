@@ -22,7 +22,9 @@ public class RewardCalculator {
 
         for (Vehicle v : vehicles) {
             if (v.isStopped()) {
-                reward -= 1.0; // pénalité pour chaque voiture arrêtée
+                // Pénalité croissante avec le temps d'attente pour éviter la famine
+                double waitPenalty = 1.0 + (v.getWaitTime() * 0.5);
+                reward -= waitPenalty; 
             } else {
                 reward += 0.5; // bonus pour chaque voiture qui roule
             }

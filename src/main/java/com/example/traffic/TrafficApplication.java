@@ -281,9 +281,6 @@ public class TrafficApplication extends Application {
         Button emergencyBtn = makeScenarioBtn("🚨 Urgence", "#ef4444", "#dc2626");
         emergencyBtn.setOnAction(e -> triggerEmergency());
 
-        Button doubleEmergencyBtn = makeScenarioBtn("🚨🚨 Double Urgence", "#991b1b", "#7f1d1d");
-        doubleEmergencyBtn.setOnAction(e -> animationController.getSimulationEngine().spawnDoubleEmergency());
-
         // Scénarios environnement
         btnRush = makeScenarioBtn("🚗 Heure de Pointe", "#854d0e", "#713f12");
         btnRush.setOnAction(e -> toggleRushHour());
@@ -298,7 +295,7 @@ public class TrafficApplication extends Application {
         btnNight = makeScenarioBtn("🌙 Nuit", "#4c1d95", "#2e1065");
         btnNight.setOnAction(e -> toggleNight());
 
-        HBox scenariosRow = new HBox(15, emergencyBtn, doubleEmergencyBtn, btnRush, btnRain, btnNight, resetBtn);
+        HBox scenariosRow = new HBox(15, emergencyBtn, btnRush, btnRain, btnNight, resetBtn);
         scenariosRow.setAlignment(Pos.CENTER);
 
         VBox scenariosContainer = new VBox(12, scenariosRow);

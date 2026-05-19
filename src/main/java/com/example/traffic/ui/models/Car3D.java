@@ -29,7 +29,8 @@ public class Car3D {
     private final Shape3D taillightR;
     private final Shape3D mirrorL;
     private final Shape3D mirrorR;
-    private final List<Shape3D> wheels = new ArrayList<>();
+    private final List<javafx.scene.Node> wheels = new ArrayList<>();
+    private final List<Rotate> wheelRotations = new ArrayList<>();
     private final PointLight headLight;
 
     private boolean isEmergency = false;
@@ -42,7 +43,7 @@ public class Car3D {
     public Car3D(Vehicle vehicle, Shape3D body, Shape3D hood, Shape3D trunk, 
                  Shape3D cabin, Shape3D windshield,
                  Shape3D headlightL, Shape3D headlightR, Shape3D taillightL, Shape3D taillightR,
-                 Shape3D mirrorL, Shape3D mirrorR, List<Shape3D> wheels) {
+                 Shape3D mirrorL, Shape3D mirrorR, List<javafx.scene.Node> wheels) {
         this.vehicle = vehicle;
         this.body = body;
         this.hood = hood;
@@ -55,10 +56,25 @@ public class Car3D {
         this.taillightR = taillightR;
         this.mirrorL = mirrorL;
         this.mirrorR = mirrorR;
-        if (wheels != null) this.wheels.addAll(wheels);
+        
+        if (wheels != null) {
+            this.wheels.addAll(wheels);
+            for (javafx.scene.Node wheel : wheels) {
+                if (wheel != null) {
+                    wheel.setRotate(0);
+                    Rotate rx = new Rotate(90, Rotate.X_AXIS);
+                    Rotate ry = new Rotate(0, Rotate.Y_AXIS);
+                    // IMPORTANTE : ry (rotation de cap) d'abord, puis rx (couchage de la roue) ensuite
+                    wheel.getTransforms().addAll(ry, rx);
+                    wheelRotations.add(ry);
+                }
+            }
+        }
 
         for (javafx.scene.Node part : getAllPartsAsList()) {
-            if (part != null) part.setRotationAxis(Rotate.Y_AXIS);
+            if (part != null && !this.wheels.contains(part)) {
+                part.setRotationAxis(Rotate.Y_AXIS);
+            }
         }
         
         this.headLight = new PointLight(Color.rgb(255, 255, 200, 0.8));
@@ -218,16 +234,39 @@ public class Car3D {
             setPart(taillightR, cx - tailDist * cos + side * sin, y + 2, cz - tailDist * sin - side * cos, angleDeg);
         }
 
+        // Déterminer dynamiquement le placement des roues selon les dimensions du châssis
+        double bodyWidth = 26;
+        double bodyHeight = 12;
+        if (body instanceof Box) {
+            Box b = (Box) body;
+            bodyWidth = b.getDepth();   // Largeur sur l'axe Z
+            bodyHeight = b.getHeight(); // Hauteur sur l'axe Y
+        }
+
         // Roues
-        if (wheels.size() >= 4) {
+        if (wheels.size() >= 4 && wheelRotations.size() >= 4) {
             double wDistF = 18;
             double wDistR = 16;
-            double wSide = 14;
-            double wY = y + 8;
-            setPart(wheels.get(0), cx + wDistF * cos - wSide * sin, wY, cz + wDistF * sin + wSide * cos, angleDeg);
-            setPart(wheels.get(1), cx + wDistF * cos + wSide * sin, wY, cz + wDistF * sin - wSide * cos, angleDeg);
-            setPart(wheels.get(2), cx - wDistR * cos - wSide * sin, wY, cz - wDistR * sin + wSide * cos, angleDeg);
-            setPart(wheels.get(3), cx - wDistR * cos + wSide * sin, wY, cz - wDistR * sin - wSide * cos, angleDeg);
+            // Aligner les roues exactement sur les flancs du châssis
+            double wSide = bodyWidth / 2.0;
+            // Placer l'axe des roues exactement au bas du châssis central
+            double wY = y + (bodyHeight / 2.0);
+
+            setWheel(0, cx + wDistF * cos - wSide * sin, wY, cz + wDistF * sin + wSide * cos, angleDeg);
+            setWheel(1, cx + wDistF * cos + wSide * sin, wY, cz + wDistF * sin - wSide * cos, angleDeg);
+            setWheel(2, cx - wDistR * cos - wSide * sin, wY, cz - wDistR * sin + wSide * cos, angleDeg);
+            setWheel(3, cx - wDistR * cos + wSide * sin, wY, cz - wDistR * sin - wSide * cos, angleDeg);
+        }
+    }
+
+    private void setWheel(int index, double x, double y, double z, double angle) {
+        javafx.scene.Node wheel = wheels.get(index);
+        if (wheel == null) return;
+        wheel.setTranslateX(x);
+        wheel.setTranslateY(y);
+        wheel.setTranslateZ(z);
+        if (index < wheelRotations.size()) {
+            wheelRotations.get(index).setAngle(angle);
         }
     }
 

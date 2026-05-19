@@ -8,8 +8,8 @@ import java.util.Random;
  * Agent de Q-Learning pour l'optimisation des feux tricolores.
  *
  * Actions possibles :
- *   0 = Feux Ouest/Est au VERT (Nord/Sud au ROUGE)
- *   1 = Feux Nord/Sud au VERT (Ouest/Est au ROUGE)
+ * 0 = Feux Ouest/Est au VERT (Nord/Sud au ROUGE)
+ * 1 = Feux Nord/Sud au VERT (Ouest/Est au ROUGE)
  *
  * L'agent apprend en temps réel quelle configuration de feux
  * minimise le temps d'attente des véhicules.
@@ -20,11 +20,11 @@ public class QLearningAgent {
     private final Map<String, double[]> qTable = new HashMap<>();
 
     // Hyperparamètres
-    private double alpha = 0.1;     // Taux d'apprentissage
-    private double gamma = 0.9;     // Facteur de discount (importance du futur)
-    private double epsilon = 0.3;   // Taux d'exploration (30% au début)
+    private double alpha = 0.1; // Taux d'apprentissage
+    private double gamma = 0.9; // Facteur de discount (importance du futur)
+    private double epsilon = 0.3; // Taux d'exploration (30% au début)
     private double epsilonDecay = 0.999; // Décroissance de l'exploration
-    private double epsilonMin = 0.05;    // Exploration minimale
+    private double epsilonMin = 0.05; // Exploration minimale
 
     private final Random random = new Random();
 
@@ -39,6 +39,7 @@ public class QLearningAgent {
 
     /**
      * Choisit une action avec la stratégie epsilon-greedy.
+     * 
      * @param state l'état actuel du trafic
      * @return 0 (vert WE) ou 1 (vert NS)
      */
@@ -61,12 +62,12 @@ public class QLearningAgent {
         lastConfidence = maxQ == 0 && minQ == 0 ? 0.5 : Math.min(0.99, 0.6 + Math.abs(maxQ - minQ) * 0.1);
 
         if (bestAction == 0) {
-            lastDecisionReason = String.format("E/O prioritaire (Q=%.2f vs %.2f). %d véh. E/O en attente.",
-                    qValues[0], qValues[1], state.getWaitingWestEast());
+            lastDecisionReason = String.format("E/O prioritaire. Pression E/O: %s | N/S: %s",
+                    state.getLevelWestEast(), state.getLevelNorthSouth());
             lastAction = "VERT E/O";
         } else {
-            lastDecisionReason = String.format("N/S prioritaire (Q=%.2f vs %.2f). %d véh. N/S en attente.",
-                    qValues[1], qValues[0], state.getWaitingNorthSouth());
+            lastDecisionReason = String.format("N/S prioritaire. Pression N/S: %s | E/O: %s",
+                    state.getLevelNorthSouth(), state.getLevelWestEast());
             lastAction = "VERT N/S";
         }
 
@@ -101,25 +102,43 @@ public class QLearningAgent {
      * Récupère ou initialise les valeurs Q pour un état donné.
      */
     private double[] getQValues(TrafficState state) {
-        return qTable.computeIfAbsent(state.toKey(), k -> new double[]{0.0, 0.0});
+        return qTable.computeIfAbsent(state.toKey(), k -> new double[] { 0.0, 0.0 });
     }
 
     // ── Getters ──────────────────────────────────────────
 
-    public double getTotalReward() { return totalReward; }
-    public int getTotalSteps() { return totalSteps; }
+    public double getTotalReward() {
+        return totalReward;
+    }
+
+    public int getTotalSteps() {
+        return totalSteps;
+    }
 
     public double getAverageReward() {
         return totalSteps == 0 ? 0.0 : totalReward / totalSteps;
     }
 
-    public double getEpsilon() { return epsilon; }
-    public int getQTableSize() { return qTable.size(); }
+    public double getEpsilon() {
+        return epsilon;
+    }
+
+    public int getQTableSize() {
+        return qTable.size();
+    }
 
     // ── Infos décision pour le panneau IA ──────────────
-    public String getLastDecisionReason() { return lastDecisionReason; }
-    public double getLastConfidence() { return lastConfidence; }
-    public String getLastActionName() { return lastAction; }
+    public String getLastDecisionReason() {
+        return lastDecisionReason;
+    }
+
+    public double getLastConfidence() {
+        return lastConfidence;
+    }
+
+    public String getLastActionName() {
+        return lastAction;
+    }
 
     /** Réinitialise l'agent */
     public void reset() {

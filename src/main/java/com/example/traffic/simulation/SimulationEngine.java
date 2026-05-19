@@ -195,7 +195,7 @@ public class SimulationEngine {
     public void setNightMode(boolean night) {
         this.nightMode = night;
         updateAllVehicleSpeeds();
-        logAI(night ? "🌙 Mode Nuit — Cycles de feux courts" : "☀️ Mode Jour restauré");
+        logAI(night ? "🌙 Mode Nuit — Cycles de feux courts" : "Mode Jour restauré");
     }
 
     private void updateAllVehicleSpeeds() {
@@ -500,19 +500,7 @@ public class SimulationEngine {
         return em;
     }
 
-    /** Spawn une double urgence séquentielle */
-    public void spawnDoubleEmergency() {
-        spawnEmergencyVehicle();
-        // On lance une deuxième urgence après 2 secondes
-        new Thread(() -> {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            javafx.application.Platform.runLater(this::spawnEmergencyVehicle);
-        }).start();
-    }
+
 
     // ══════════════════════════════════════════════════════
     // IA Q-LEARNING
@@ -551,20 +539,55 @@ public class SimulationEngine {
         applyControllerToLights();
     }
 
-    // ══════════════════════════════════════════════════════
-    // DÉPLACEMENT DES VÉHICULES (avec distance de sécurité)
-    // ══════════════════════════════════════════════════════
+    private static class LeadVehicleResult {
+        final Vehicle vehicle;
+        final double progressGap;
 
-    /** Distance de sécurité minimale en unités absolues */
-    public double getSafeDistance(Edge edge) {
-        if (edge == null)
-            return 0.1;
-        // Une voiture fait environ 60 unités de long (du pare-chocs avant au pare-chocs
-        // arrière).
-        // 90 unités = 1 voiture + 30 unités d'espace (environ une demi-voiture
-        // d'espace)
-        double minGap = rainMode ? 120.0 : 90.0;
-        return minGap / edge.getLength();
+        LeadVehicleResult(Vehicle vehicle, double progressGap) {
+            this.vehicle = vehicle;
+            this.progressGap = progressGap;
+        }
+    }
+
+    private LeadVehicleResult findLeadVehicle(Vehicle current) {
+        Edge currentEdge = current.getCurrentEdge();
+        if (currentEdge == null)
+            return null;
+
+        double minDist = Double.MAX_VALUE;
+        Vehicle lead = null;
+        for (Vehicle other : vehicles) {
+            if (other == current || other.getCurrentEdge() == null)
+                continue;
+
+            Edge otherEdge = other.getCurrentEdge();
+
+            // Cas 1 : Même arête et devant
+            if (otherEdge == currentEdge && other.getProgress() > current.getProgress()) {
+                double dist = other.getProgress() - current.getProgress();
+                if (dist < minDist) {
+                    minDist = dist;
+                    lead = other;
+                }
+            }
+
+            // Cas 2 : La voiture est déjà sur l'arête suivante (intersection)
+            else if (currentEdge.getDestination().equals(otherEdge.getSource())) {
+                double remainingA = 1.0 - current.getProgress();
+                double progressB_in_A = (other.getProgress() * otherEdge.getLength()) / currentEdge.getLength();
+                double totalDist = remainingA + progressB_in_A;
+
+                if (totalDist < minDist) {
+                    minDist = totalDist;
+                    lead = other;
+                }
+            }
+        }
+        
+        if (lead != null) {
+            return new LeadVehicleResult(lead, minDist);
+        }
+        return null;
     }
 
     private void moveVehicles(double deltaTime) {
@@ -576,67 +599,105 @@ public class SimulationEngine {
             Intersection destIntersection = findIntersectionByNode(v.getCurrentEdge().getDestination());
             TrafficLight light = (destIntersection != null) ? destIntersection.getTrafficLight() : null;
 
-            boolean isRed = light != null && (light.isRed() || light.isRedYellow());
-            boolean isYellow = light != null && light.isYellow();
-
-            if (v.isEmergency()) {
-                isRed = false;
-                isYellow = false;
-            }
-
             double progress = v.getProgress();
-            double effectiveSpeed = v.getEffectiveSpeed();
+            boolean stopForLight = false;
 
-            // Ralentir à l'orange si on approche de l'intersection
-            if (isYellow && progress > 0.65) {
-                effectiveSpeed *= 0.5;
-            }
-
-            // 2. Trouver la voiture devant
-            double distToCarAhead = findDistanceToCarAhead(v);
-            double safeDist = getSafeDistance(v.getCurrentEdge());
-            // 3. Limiter par la voiture devant (distance de sécurité)
-            if (distToCarAhead < safeDist * 2) {
-                // Trop proche → ralentir ou s'arrêter
-                if (distToCarAhead <= safeDist) {
-                    v.setStopped(true);
-                    v.addWaitTime(deltaTime);
-                    continue; // Ne pas bouger du tout
-                }
-                // Ralentir proportionnellement à la distance
-                double slowFactor = (distToCarAhead - safeDist) / safeDist;
-                effectiveSpeed *= Math.max(0.1, slowFactor);
-            }
-
-            double nextProgress = progress + (effectiveSpeed * deltaTime) / 100.0;
-
-            // 4. Arrêter au feu rouge (rester arrêté tant que c'est rouge)
-            if (isRed && progress <= 0.96 && nextProgress >= 0.96) {
-                v.setStopped(true);
-                v.setProgress(0.96);
-                v.addWaitTime(deltaTime);
-                continue;
-            }
-
-            // 6. Limiter par la voiture devant
-            if (distToCarAhead < Double.MAX_VALUE) {
-                double safeDistVal = getSafeDistance(v.getCurrentEdge());
-                double maxAllowed = v.getProgress() + (distToCarAhead - safeDistVal);
-                if (nextProgress > maxAllowed && nextProgress < 1.0) {
-                    nextProgress = Math.max(progress, maxAllowed);
-                    if (nextProgress <= progress) {
-                        v.setStopped(true);
-                        v.addWaitTime(deltaTime);
-                        continue;
+            if (light != null && progress < 0.96 && !v.isEmergency()) {
+                boolean isRed = light.isRed() || light.isRedYellow();
+                boolean isYellow = light.isYellow();
+                if (isRed) {
+                    stopForLight = true;
+                } else if (isYellow) {
+                    // S'arrêter à l'orange uniquement s'il y a assez de distance pour freiner confortablement
+                    double edgeLength = v.getCurrentEdge().getLength();
+                    double distToLight = (0.96 - progress) * edgeLength;
+                    double decelComfort = 15.0;
+                    double brakingDistance = (v.getSpeed() * v.getSpeed()) / (2.0 * decelComfort);
+                    if (distToLight > brakingDistance) {
+                        stopForLight = true;
                     }
                 }
             }
 
-            v.setStopped(false);
-            progress = nextProgress;
+            // 2. Identifier les cibles pour l'IDM (Véhicule de tête ou Feu rouge)
+            double s = Double.MAX_VALUE; // Distance nette en coordonnées
+            double deltaV = 0.0;
+            boolean hasTarget = false;
 
-            // 7. Fin d'arête → passer à la suivante
-            if (progress >= 1.0) {
+            // Cible A : Véhicule de tête réel
+            LeadVehicleResult leadResult = findLeadVehicle(v);
+            if (leadResult != null) {
+                double edgeLength = v.getCurrentEdge().getLength();
+                double distInUnits = leadResult.progressGap * edgeLength;
+                // Espace net pare-chocs à pare-chocs (châssis de 60 unités)
+                double netGap = distInUnits - 60.0;
+                s = Math.max(0.1, netGap);
+                deltaV = v.getSpeed() - leadResult.vehicle.getSpeed();
+                hasTarget = true;
+            }
+
+            // Cible B : Feu de signalisation (obstacle virtuel à progress = 0.96)
+            if (stopForLight) {
+                double edgeLength = v.getCurrentEdge().getLength();
+                double distInUnits = (0.96 - progress) * edgeLength;
+                // Espace net avec une marge d'arrêt de 10 unités avant le feu
+                double netGap = distInUnits - 10.0;
+                netGap = Math.max(0.1, netGap);
+                if (netGap < s) {
+                    s = netGap;
+                    deltaV = v.getSpeed(); // Cible fixe (vitesse = 0)
+                    hasTarget = true;
+                }
+            }
+
+            // 3. Calcul de l'IDM (vitesse désirée, accélération, etc.)
+            double v0 = v.getBaseSpeed();
+            double currentSpeed = v.getSpeed();
+
+            double aMax = v.isEmergency() ? 25.0 : 15.0;
+            double bComfort = v.isEmergency() ? 25.0 : 15.0;
+            double s0 = 15.0; // Distance d'arrêt minimale
+            double T = 1.0;   // Headway temporel de sécurité
+            double delta = 4.0;
+
+            double acceleration = 0.0;
+            if (hasTarget) {
+                double sStar = s0 + currentSpeed * T + (currentSpeed * deltaV) / (2.0 * Math.sqrt(aMax * bComfort));
+                sStar = Math.max(s0, sStar);
+                
+                double speedTerm = Math.pow(currentSpeed / v0, delta);
+                double gapTerm = Math.pow(sStar / s, 2.0);
+                
+                acceleration = aMax * (1.0 - speedTerm - gapTerm);
+            } else {
+                double speedTerm = Math.pow(currentSpeed / v0, delta);
+                acceleration = aMax * (1.0 - speedTerm);
+            }
+
+            // 4. Intégration de la vitesse et de la position
+            double newSpeed = currentSpeed + acceleration * deltaTime;
+            newSpeed = Math.max(0.0, Math.min(v0, newSpeed));
+            v.setSpeed(newSpeed);
+
+            // Déplacement basé sur la vitesse effective (qui intègre le modificateur de pluie/nuit)
+            double nextProgress = progress + (v.getEffectiveSpeed() * deltaTime) / 100.0;
+
+            // Sécurité : Ne pas franchir la ligne de feu rouge à cause des approximations d'intégration
+            if (stopForLight && nextProgress >= 0.96) {
+                nextProgress = 0.96;
+                v.setSpeed(0.0);
+            }
+
+            // Mise à jour de l'état arrêté pour le temps d'attente
+            if (v.getSpeed() < 0.5) {
+                v.setStopped(true);
+                v.addWaitTime(deltaTime);
+            } else {
+                v.setStopped(false);
+            }
+
+            // 5. Transition d'arête
+            if (nextProgress >= 1.0) {
                 Node dest = v.getCurrentEdge().getDestination();
                 v.setCurrentNode(dest);
 
@@ -645,85 +706,17 @@ public class SimulationEngine {
                     if (!nextRoutes.isEmpty()) {
                         int idx = Math.min(v.getPreferredRouteIndex(), nextRoutes.size() - 1);
                         v.setCurrentEdge(nextRoutes.get(idx));
-                        progress = 0.0;
+                        nextProgress = 0.0;
                     } else {
-                        // Fin du trajet
-                        if (v.isEmergency()) {
-                            v.setMarkedForRemoval(true);
-                        } else {
-                            v.setMarkedForRemoval(true); // Supprimer la voiture en fin de route
-                        }
+                        v.setMarkedForRemoval(true);
                         continue;
                     }
                 } else {
-                    progress = 1.0;
+                    nextProgress = 1.0;
                 }
             }
-            v.setProgress(progress);
+            v.setProgress(nextProgress);
         }
-    }
-
-    /**
-     * Trouve la distance (en progress) à la voiture la plus proche devant sur la
-     * même arête
-     */
-    private double findDistanceToCarAhead(Vehicle current) {
-        Edge currentEdge = current.getCurrentEdge();
-        if (currentEdge == null)
-            return Double.MAX_VALUE;
-
-        double minDist = Double.MAX_VALUE;
-        for (Vehicle other : vehicles) {
-            if (other == current || other.getCurrentEdge() == null)
-                continue;
-
-            Edge otherEdge = other.getCurrentEdge();
-
-            // Cas 1 : Même arête et devant
-            if (otherEdge == currentEdge && other.getProgress() > current.getProgress()) {
-                double dist = other.getProgress() - current.getProgress();
-                if (dist < minDist)
-                    minDist = dist;
-            }
-
-            // Cas 2 : La voiture est déjà sur l'arête suivante (intersection)
-            // On vérifie si la destination de notre arête est le départ de l'arête de
-            // l'autre
-            else if (currentEdge.getDestination().equals(otherEdge.getSource())) {
-                // On calcule la distance combinée en unités de "progress" de l'arête actuelle
-                // dist = (ce qu'il reste sur l'arête A) + (ce qui est déjà parcouru sur l'arête
-                // B, converti)
-                double remainingA = 1.0 - current.getProgress();
-                double progressB_in_A = (other.getProgress() * otherEdge.getLength()) / currentEdge.getLength();
-                double totalDist = remainingA + progressB_in_A;
-
-                if (totalDist < minDist)
-                    minDist = totalDist;
-            }
-        }
-        return minDist;
-    }
-
-    /** Récupère la progress de la voiture la plus proche devant */
-    private double getCarAheadProgress(Vehicle current) {
-        Edge currentEdge = current.getCurrentEdge();
-        if (currentEdge == null)
-            return Double.MAX_VALUE;
-
-        double closestProgress = Double.MAX_VALUE;
-        double closestDist = Double.MAX_VALUE;
-        for (Vehicle other : vehicles) {
-            if (other == current || other.getCurrentEdge() == null)
-                continue;
-            if (other.getCurrentEdge() == currentEdge && other.getProgress() > current.getProgress()) {
-                double dist = other.getProgress() - current.getProgress();
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    closestProgress = other.getProgress();
-                }
-            }
-        }
-        return closestProgress;
     }
 
     // ══════════════════════════════════════════════════════
