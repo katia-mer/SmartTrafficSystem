@@ -89,6 +89,7 @@ public class SimulationEngine {
     private double totalWaitEW = 0.0;
     private int waitingCountNS = 0;
     private int waitingCountEW = 0;
+    private int vehiclesCompleted = 0; // Compteur pour le débit (throughput)
 
     // ── Types d'urgence ──
     public static final String[] EMERGENCY_TYPES = { "ambulance", "fire", "police", "rescue" };
@@ -176,6 +177,14 @@ public class SimulationEngine {
 
     public List<String> getAiLog() {
         return aiLog;
+    }
+
+    public int getVehiclesCompleted() {
+        return vehiclesCompleted;
+    }
+
+    public void incrementVehiclesCompleted() {
+        vehiclesCompleted++;
     }
 
     public void addEntryNodeId(String nodeId) {
@@ -439,7 +448,12 @@ public class SimulationEngine {
         Vehicle v = new Vehicle("V" + (vehicleIdCounter++), entryNode, speed);
         v.setCurrentEdge(edges.get(0));
         v.setProgress(0.0);
-        v.setPreferredRouteIndex(0); // Toujours tout droit comme avant
+        
+        // Choisir une direction aléatoire : 0=Tout droit (60%), 1=Droite (20%), 2=Gauche (20%)
+        int r = random.nextInt(100);
+        if (r < 60) v.setPreferredRouteIndex(0);
+        else if (r < 80) v.setPreferredRouteIndex(1);
+        else v.setPreferredRouteIndex(2);
 
         v.setSpeedModifier(calculateTotalModifier());
 
@@ -460,7 +474,13 @@ public class SimulationEngine {
         Vehicle v = new Vehicle("V" + (vehicleIdCounter++), entryNode, speed, type);
         v.setCurrentEdge(edges.get(0));
         v.setProgress(0.0);
-        v.setPreferredRouteIndex(0);
+        
+        // Direction aléatoire
+        int r = random.nextInt(100);
+        if (r < 60) v.setPreferredRouteIndex(0);
+        else if (r < 80) v.setPreferredRouteIndex(1);
+        else v.setPreferredRouteIndex(2);
+        
         v.setSpeedModifier(calculateTotalModifier());
 
         vehicles.add(v);
@@ -489,7 +509,12 @@ public class SimulationEngine {
         Vehicle em = new Vehicle("EM" + (vehicleIdCounter++), entryNode, 120, emType);
         em.setCurrentEdge(edges.get(0));
         em.setProgress(0.0);
-        em.setPreferredRouteIndex(0);
+        
+        // Les urgences aussi peuvent tourner
+        int r = random.nextInt(100);
+        if (r < 60) em.setPreferredRouteIndex(0);
+        else if (r < 80) em.setPreferredRouteIndex(1);
+        else em.setPreferredRouteIndex(2);
 
         vehicles.add(em);
         activeEmergency = em;
@@ -655,6 +680,70 @@ public class SimulationEngine {
                 }
             }
 
+            // Cible C : Évitement de collision (Croisements dans l'intersection)
+            Vehicle conflictTarget = null;
+            double conflictDist = Double.MAX_VALUE;
+
+            for (Vehicle other : vehicles) {
+                if (other == v || other.getCurrentEdge() == null) continue;
+                if (other.getCurrentEdge() == v.getCurrentEdge()) continue; // Déjà géré par Cible A
+
+                double dist = Math.hypot(v.getX() - other.getX(), v.getY() - other.getY());
+                
+                if (dist < 100.0) { // Rayon de détection large pour l'intersection
+                    double dx = v.getCurrentEdge().getDestination().getX() - v.getCurrentEdge().getSource().getX();
+                    double dy = v.getCurrentEdge().getDestination().getY() - v.getCurrentEdge().getSource().getY();
+                    double len = Math.hypot(dx, dy);
+                    if (len > 0) { dx /= len; dy /= len; }
+                    
+                    double ox = other.getX() - v.getX();
+                    double oy = other.getY() - v.getY();
+                    
+                    double dotForward = dx * ox + dy * oy;
+                    double dotSide = Math.abs(-dy * ox + dx * oy);
+
+                    // Si Other est devant nous et dans notre couloir de collision
+                    if (dotForward > 15.0 && dotSide < 50.0) {
+                        boolean yield = false;
+
+                        if (!v.isEmergency() && other.isEmergency()) {
+                            yield = true;
+                        } else if (v.isEmergency() && !other.isEmergency()) {
+                            yield = false;
+                        } else if (v.getPreferredRouteIndex() == 2 && other.getPreferredRouteIndex() == 0) {
+                            yield = true; // Je tourne à gauche, il va tout droit -> je cède
+                        } else if (v.getPreferredRouteIndex() == 0 && other.getPreferredRouteIndex() == 2) {
+                            yield = false;
+                        } else {
+                            double distToCenterV = Math.hypot(v.getX(), v.getY());
+                            double distToCenterOther = Math.hypot(other.getX(), other.getY());
+                            if (distToCenterOther < distToCenterV - 10.0) {
+                                yield = true; // Il est déjà plus engagé
+                            } else if (distToCenterV < distToCenterOther - 10.0) {
+                                yield = false;
+                            } else {
+                                yield = v.getId().compareTo(other.getId()) > 0; // Fallback
+                            }
+                        }
+
+                        if (yield && dist < conflictDist) {
+                            conflictDist = dist;
+                            conflictTarget = other;
+                        }
+                    }
+                }
+            }
+
+            if (conflictTarget != null) {
+                double netGap = conflictDist - 30.0;
+                netGap = Math.max(0.1, netGap);
+                if (netGap < s) {
+                    s = netGap;
+                    deltaV = v.getSpeed(); 
+                    hasTarget = true;
+                }
+            }
+
             // 3. Calcul de l'IDM (vitesse désirée, accélération, etc.)
             double v0 = v.getBaseSpeed();
             double currentSpeed = v.getSpeed();
@@ -685,7 +774,10 @@ public class SimulationEngine {
             v.setSpeed(newSpeed);
 
             // Déplacement basé sur la vitesse effective (qui intègre le modificateur de pluie/nuit)
-            double nextProgress = progress + (v.getEffectiveSpeed() * deltaTime) / 100.0;
+            // Ajustement pour maintenir une vitesse visuelle constante (les virages sont des routes courtes)
+            double currentEdgeLen = v.getCurrentEdge().getLength();
+            if (currentEdgeLen < 1.0) currentEdgeLen = 1.0;
+            double nextProgress = progress + (v.getEffectiveSpeed() * 15.0 * deltaTime) / currentEdgeLen;
 
             // Sécurité : Ne pas franchir la ligne de feu rouge à cause des approximations d'intégration
             if (stopForLight && nextProgress >= 0.96) {
@@ -721,6 +813,33 @@ public class SimulationEngine {
                 }
             }
             v.setProgress(nextProgress);
+
+            // 6. Gestion des clignotants (Réalisme visuel)
+            if (v.getCurrentEdge() != null) {
+                Node dest = v.getCurrentEdge().getDestination();
+                List<Edge> nextRoutes = graph.getNeighbors(dest.getId());
+                
+                if (nextRoutes.size() > 1) {
+                    // Approche d'une intersection à choix multiples
+                    if (v.getProgress() > 0.6) {
+                        int routeIdx = v.getPreferredRouteIndex();
+                        if (routeIdx == 1) v.setTurnSignal(Vehicle.TurnSignal.RIGHT);
+                        else if (routeIdx >= 2) v.setTurnSignal(Vehicle.TurnSignal.LEFT);
+                        else v.setTurnSignal(Vehicle.TurnSignal.NONE);
+                    } else {
+                        v.setTurnSignal(Vehicle.TurnSignal.NONE);
+                    }
+                } else if (v.getCurrentEdge().getDestination().getId().startsWith("C") || 
+                           v.getCurrentEdge().getSource().getId().startsWith("C")) {
+                    // Dans le virage (nœud intermédiaire 'C' pour Corner)
+                    if (v.getCurrentEdge().getSource().getId().startsWith("C") && v.getProgress() > 0.8) {
+                        v.setTurnSignal(Vehicle.TurnSignal.NONE);
+                    }
+                    // Sinon on garde l'état précédent (clignotant allumé)
+                } else {
+                    v.setTurnSignal(Vehicle.TurnSignal.NONE);
+                }
+            }
         }
     }
 

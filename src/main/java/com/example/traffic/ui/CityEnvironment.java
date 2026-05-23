@@ -61,6 +61,41 @@ public class CityEnvironment extends Group {
         addLampposts();
         createSkybox();
         createRainSystem();
+        addCompass();
+    }
+
+    private void addCompass() {
+        // Placer les lettres au bout des routes (où les voitures spawnent)
+        double dist = 1600;
+        addCompassLetter("N", 0, -dist, 0);
+        addCompassLetter("S", 0, dist, 180);
+        addCompassLetter("E", dist, 0, -90);
+        addCompassLetter("W", -dist, 0, 90);
+    }
+
+    private void addCompassLetter(String letter, double x, double z, double rotateY) {
+        Group group = new Group();
+        javafx.scene.text.Text text = new javafx.scene.text.Text(letter);
+        // Police géante pour être vue de loin
+        text.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 500));
+        text.setFill(Color.rgb(255, 200, 0, 0.9));
+        
+        // Centrer grossièrement le texte 2D par rapport au groupe
+        text.setTranslateX(-170);
+        text.setTranslateY(0); 
+
+        group.getChildren().add(text);
+        
+        // Positionner le groupe dans la ville
+        group.setTranslateX(x);
+        group.setTranslateY(-150); // Surélevé par rapport au sol (debout)
+        group.setTranslateZ(z);
+        
+        // Tourner pour faire face au centre de l'intersection
+        group.setRotationAxis(javafx.scene.transform.Rotate.Y_AXIS);
+        group.setRotate(rotateY);
+        
+        this.getChildren().add(group);
     }
 
     // ═══════════════════════════════════════════════════════

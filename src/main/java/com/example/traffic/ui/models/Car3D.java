@@ -207,8 +207,9 @@ public class Car3D {
         // Phares avant (ajustés pour être sur le capot)
         double headDist = 23;
         double side = 7;
-        setPart(headlightL, cx + headDist * cos - side * sin, y + 2, cz + headDist * sin + side * cos, angleDeg);
-        setPart(headlightR, cx + headDist * cos + side * sin, y + 2, cz + headDist * sin - side * cos, angleDeg);
+        // Left side is +sin, -cos. Right side is -sin, +cos.
+        setPart(headlightL, cx + headDist * cos + side * sin, y + 2, cz + headDist * sin - side * cos, angleDeg);
+        setPart(headlightR, cx + headDist * cos - side * sin, y + 2, cz + headDist * sin + side * cos, angleDeg);
 
         // Lumière projetée (plus proche du sol et du pare-chocs)
         if (headLight != null) {
@@ -220,18 +221,18 @@ public class Car3D {
         // Rétroviseurs
         double mirDist = 12;
         double mirSide = 15;
-        setPart(mirrorL, cx + mirDist * cos - mirSide * sin, y - 6, cz + mirDist * sin + mirSide * cos, angleDeg);
-        setPart(mirrorR, cx + mirDist * cos + mirSide * sin, y - 6, cz + mirDist * sin - mirSide * cos, angleDeg);
+        setPart(mirrorL, cx + mirDist * cos + mirSide * sin, y - 6, cz + mirDist * sin - mirSide * cos, angleDeg);
+        setPart(mirrorR, cx + mirDist * cos - mirSide * sin, y - 6, cz + mirDist * sin + mirSide * cos, angleDeg);
 
         if (isEmergency) {
             // Gyrophares
-            setPart(taillightL, cx - 5 * sin, y - 22, cz + 5 * cos, angleDeg);
-            setPart(taillightR, cx + 5 * sin, y - 22, cz - 5 * cos, angleDeg);
+            setPart(taillightL, cx + 5 * sin, y - 22, cz - 5 * cos, angleDeg);
+            setPart(taillightR, cx - 5 * sin, y - 22, cz + 5 * cos, angleDeg);
         } else {
             // Feux arrière
             double tailDist = 26;
-            setPart(taillightL, cx - tailDist * cos - side * sin, y + 2, cz - tailDist * sin + side * cos, angleDeg);
-            setPart(taillightR, cx - tailDist * cos + side * sin, y + 2, cz - tailDist * sin - side * cos, angleDeg);
+            setPart(taillightL, cx - tailDist * cos + side * sin, y + 2, cz - tailDist * sin - side * cos, angleDeg);
+            setPart(taillightR, cx - tailDist * cos - side * sin, y + 2, cz - tailDist * sin + side * cos, angleDeg);
         }
 
         // Déterminer dynamiquement le placement des roues selon les dimensions du châssis

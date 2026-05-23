@@ -106,8 +106,8 @@ public class AnimationController3D {
         // Virage à gauche
         e(graph, wS, cWN); e(graph, cWN, nX);    // W→N
         e(graph, eS, cES); e(graph, cES, sX);    // E→S
-        e(graph, nS, cNE); e(graph, cNE, eX);    // N→E
-        e(graph, sS, cSW); e(graph, cSW, wX);    // S→W
+        e(graph, nS, cWS); e(graph, cWS, eX);    // N→E (Correction: trajet orthogonal via -40, 40)
+        e(graph, sS, cEN); e(graph, cEN, wX);    // S→W (Correction: trajet orthogonal via 40, -40)
 
         // ══ Enregistrer les nœuds d'entrée pour le spawn ══
         simulationEngine.addEntryNodeId("WE");
@@ -132,11 +132,18 @@ public class AnimationController3D {
         trafficLights3D.add(environment.addTrafficLight(sI.getTrafficLight(), 95, 95, 90));
 
         // ══ VÉHICULES INITIAUX ══
-        car(wE, graph.getNeighbors("WE").get(0), 0.0, 0);
-        car(wE, graph.getNeighbors("WE").get(0), 0.15, 0);
-        car(eE, graph.getNeighbors("EE").get(0), 0.0, 0);
-        car(nE, graph.getNeighbors("NE").get(0), 0.0, 0);
-        car(sE, graph.getNeighbors("SE").get(0), 0.1, 0);
+        car(wE, graph.getNeighbors("WE").get(0), 0.0, randomRoute());
+        car(wE, graph.getNeighbors("WE").get(0), 0.15, randomRoute());
+        car(eE, graph.getNeighbors("EE").get(0), 0.0, randomRoute());
+        car(nE, graph.getNeighbors("NE").get(0), 0.0, randomRoute());
+        car(sE, graph.getNeighbors("SE").get(0), 0.1, randomRoute());
+    }
+
+    private int randomRoute() {
+        int r = random.nextInt(100);
+        if (r < 60) return 0;  // Tout droit
+        if (r < 80) return 1;  // Droite
+        return 2;              // Gauche
     }
 
     // Helpers
