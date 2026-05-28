@@ -7,6 +7,8 @@ import com.example.traffic.graph.Node;
 import com.example.traffic.model.Intersection;
 import com.example.traffic.model.Vehicle;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,40 +18,55 @@ import java.util.List;
  */
 public class SimulationBenchmark {
 
-    private static final long SEED = 20260528L;
     private static final double DT = 0.1;
     private static final double DURATION_SECONDS = 180.0;
     private static final double SAMPLE_INTERVAL_SECONDS = 10.0;
 
     public static ComparisonResult runDefault() {
-        List<DataPoint> classic = runScenario(false);
-        List<DataPoint> ai = runScenario(true);
-        return new ComparisonResult(classic, ai);
+        long runSeed = System.currentTimeMillis();
+        
+        // On choisit les conditions aléatoirement une seule fois pour les deux runs
+        int levelPick = (int)(runSeed % 3);
+        SimulationEngine.TrafficLevel level = SimulationEngine.TrafficLevel.values()[levelPick];
+        boolean rush = runSeed % 2 == 0;
+        
+        List<DataPoint> classic = runScenario(false, runSeed, level, rush);
+        List<DataPoint> ai = runScenario(true, runSeed, level, rush); // Même seed pour comparer le même trafic
+        
+        ComparisonResult res = new ComparisonResult(classic, ai);
+        res.trafficLevel = level.name();
+        res.rushHour = rush;
+        return res;
     }
 
-    private static List<DataPoint> runScenario(boolean aiMode) {
+    public static List<DataPoint> runScenario(boolean aiMode, long seed, SimulationEngine.TrafficLevel level, boolean rushHour, double durationSeconds) {
         TrafficState.resetHistory();
 
-        SimulationEngine engine = new SimulationEngine(SEED);
+        SimulationEngine engine = new SimulationEngine(seed);
         buildNetwork(engine);
-        engine.setTrafficLevel(SimulationEngine.TrafficLevel.HIGH);
-        engine.setRushHour(true);
+        
+        engine.setTrafficLevel(level);
+        engine.setRushHour(rushHour);
         engine.setAiMode(aiMode);
 
         List<DataPoint> points = new ArrayList<>();
         double nextSample = 0.0;
 
-        int steps = (int) Math.round(DURATION_SECONDS / DT);
+        int steps = (int) Math.round(durationSeconds / DT);
         for (int i = 0; i <= steps; i++) {
             double time = i * DT;
             if (time >= nextSample || i == steps) {
                 points.add(new DataPoint(time, averageWait(engine), engine.getVehiclesCompleted()));
-                nextSample += SAMPLE_INTERVAL_SECONDS;
+                nextSample += 5.0; // Aligner sur l'intervalle de l'historique live
             }
             engine.update(DT);
         }
 
         return points;
+    }
+
+    private static List<DataPoint> runScenario(boolean aiMode, long seed, SimulationEngine.TrafficLevel level, boolean rushHour) {
+        return runScenario(aiMode, seed, level, rushHour, DURATION_SECONDS);
     }
 
     private static double averageWait(SimulationEngine engine) {
@@ -158,10 +175,79 @@ public class SimulationBenchmark {
     public static class ComparisonResult {
         public final List<DataPoint> classic;
         public final List<DataPoint> ai;
+        public String trafficLevel;
+        public boolean rushHour;
 
         public ComparisonResult(List<DataPoint> classic, List<DataPoint> ai) {
             this.classic = classic;
             this.ai = ai;
+        }
+
+        public void exportToJson(String filePath) {
+            exportToJson(filePath, this.trafficLevel, this.rushHour, this.classic, this.ai);
+        }
+
+        public static void exportLiveSession(String filePath, String trafficLevel, boolean rushHour, List<DataPoint> points, boolean isAi) {
+            exportToJson(filePath, trafficLevel, rushHour, isAi ? null : points, isAi ? points : null);
+        }
+
+        private static void exportToJson(String filePath, String trafficLevel, boolean rushHour, List<DataPoint> classic, List<DataPoint> ai) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"metadata\": {\n");
+            sb.append("    \"trafficLevel\": \"").append(trafficLevel).append("\",\n");
+            sb.append("    \"rushHour\": ").append(rushHour).append(",\n");
+            sb.append("    \"timestamp\": \"").append(new java.util.Date()).append("\"\n");
+            sb.append("  },\n");
+            
+            // Stats de base
+            sb.append("  \"wait\": {\n");
+            
+            List<DataPoint> labelsSource = (classic != null) ? classic : ai;
+            sb.append("    \"labels\": [");
+            if (labelsSource != null) {
+                for (int i = 0; i < labelsSource.size(); i++) {
+                    sb.append("\"").append((int)labelsSource.get(i).timeSeconds).append("s\"");
+                    if (i < labelsSource.size() - 1) sb.append(",");
+                }
+            }
+            sb.append("],\n");
+            
+            sb.append("    \"datasets\": [\n");
+            boolean first = true;
+            if (classic != null) {
+                appendDataset(sb, "Session Live (Classique)", classic, "#f59e0b");
+                first = false;
+            }
+            if (ai != null) {
+                if (!first) sb.append(",\n");
+                appendDataset(sb, "Session Live (IA)", ai, "#38bdf8");
+            }
+            sb.append("\n    ]\n");
+            sb.append("  }\n");
+            sb.append("}");
+
+            try (FileWriter writer = new FileWriter(filePath)) {
+                writer.write(sb.toString());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private static void appendDataset(StringBuilder sb, String label, List<DataPoint> points, String color) {
+            sb.append("      {\n");
+            sb.append("        \"label\": \"").append(label).append("\",\n");
+            sb.append("        \"data\": [");
+            for (int i = 0; i < points.size(); i++) {
+                sb.append(String.format("%.2f", points.get(i).averageWaitSeconds).replace(",", "."));
+                if (i < points.size() - 1) sb.append(",");
+            }
+            sb.append("],\n");
+            sb.append("        \"borderColor\": \"").append(color).append("\",\n");
+            sb.append("        \"backgroundColor\": \"").append(color).append("1A\",\n");
+            sb.append("        \"fill\": true,\n");
+            sb.append("        \"tension\": 0.4\n");
+            sb.append("      }");
         }
     }
 }

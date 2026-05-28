@@ -269,7 +269,22 @@ public class SimulationEngine {
     // MISE À JOUR PRINCIPALE
     // ══════════════════════════════════════════════════════
 
+    // Historique pour export (lié à SimulationBenchmark.DataPoint)
+    private final List<SimulationBenchmark.DataPoint> history = new ArrayList<>();
+    private double historyTimer = 0.0;
+    private double simulationTime = 0.0;
+    private static final double HISTORY_INTERVAL = 5.0; // Capturer un point toutes les 5s
+
     public void update(double deltaTime) {
+        simulationTime += deltaTime;
+        historyTimer += deltaTime;
+
+        if (historyTimer >= HISTORY_INTERVAL) {
+            double avgWait = (waitingCountNS + waitingCountEW == 0) ? 0 : (totalWaitNS + totalWaitEW) / (waitingCountNS + waitingCountEW);
+            history.add(new SimulationBenchmark.DataPoint(simulationTime, avgWait, vehiclesCompleted));
+            historyTimer = 0;
+        }
+
         // 1. Contrôle des feux
         if (aiMode) {
             updateAI(deltaTime);
@@ -288,6 +303,10 @@ public class SimulationEngine {
 
         // 5. Nettoyage véhicules hors limites
         cleanupVehicles();
+    }
+
+    public List<SimulationBenchmark.DataPoint> getHistory() {
+        return history;
     }
 
     // ══════════════════════════════════════════════════════
@@ -935,6 +954,9 @@ public class SimulationEngine {
         controllerTimer = 10.0;
         nsState = TrafficLight.State.GREEN;
         ewState = TrafficLight.State.RED;
+        history.clear();
+        historyTimer = 0;
+        simulationTime = 0;
         aiLog.clear();
         if (agent != null)
             agent.reset();

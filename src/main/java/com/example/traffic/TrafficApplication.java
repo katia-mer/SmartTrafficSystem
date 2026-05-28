@@ -27,6 +27,8 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.transform.Rotate;
 import javafx.stage.Stage;
 
+import java.util.List;
+
 public class TrafficApplication extends Application {
 
     private AnimationTimer timer;
@@ -50,7 +52,7 @@ public class TrafficApplication extends Application {
     private HBox emergencyAlert;
     private Button btnLow, btnMed, btnHigh;
     private Button btnRain, btnNight, btnRush;
-    private Button btnGraphs;
+    private Button btnGraphs, btnBenchmark;
 
     // FPS
     private int frameCount = 0;
@@ -304,10 +306,13 @@ public class TrafficApplication extends Application {
         btnNight = makeScenarioBtn("🌙 Nuit", "#4c1d95", "#2e1065");
         btnNight.setOnAction(e -> toggleNight());
 
-        btnGraphs = makeScenarioBtn("📊 Graphes", "#0f766e", "#115e59");
+        btnGraphs = makeScenarioBtn("📊 Stats Session", "#0f766e", "#115e59");
         btnGraphs.setOnAction(e -> runComparisonGraphs());
 
-        HBox scenariosRow = new HBox(15, emergencyBtn, btnRush, btnRain, btnNight, resetBtn, btnGraphs);
+        btnBenchmark = makeScenarioBtn("🧪 Benchmark IA", "#7c3aed", "#5b21b6");
+        btnBenchmark.setOnAction(e -> runFullBenchmark());
+
+        HBox scenariosRow = new HBox(15, emergencyBtn, btnRush, btnRain, btnNight, resetBtn, btnGraphs, btnBenchmark);
         scenariosRow.setAlignment(Pos.CENTER);
 
         VBox scenariosContainer = new VBox(12, scenariosRow);
@@ -413,17 +418,67 @@ public class TrafficApplication extends Application {
     }
 
     private void runComparisonGraphs() {
+        SimulationEngine engine = animationController.getSimulationEngine();
+        List<SimulationBenchmark.DataPoint> historyCopy = new java.util.ArrayList<>(engine.getHistory());
+
+        if (historyCopy.isEmpty()) {
+            engine.logAI("⚠️ Pas encore de données. Lancez 'Start' pendant quelques secondes.");
+            return;
+        }
+
         btnGraphs.setDisable(true);
         btnGraphs.setText("Calcul...");
 
         Thread worker = new Thread(() -> {
-            SimulationBenchmark.ComparisonResult result = SimulationBenchmark.runDefault();
-            Platform.runLater(() -> {
-                showComparisonCharts(result);
-                btnGraphs.setText("📊 Graphes");
-                btnGraphs.setDisable(false);
-            });
-        }, "traffic-comparison-graphs");
+            try {
+                // Récupérer les paramètres de la session actuelle
+                SimulationEngine.TrafficLevel level = engine.getTrafficLevel();
+                boolean rush = engine.isRushHour();
+                double duration = historyCopy.get(historyCopy.size() - 1).timeSeconds;
+
+                // Générer un baseline classique pour comparer
+                List<SimulationBenchmark.DataPoint> classicBaseline = SimulationBenchmark.runScenario(
+                        false, 42L, level, rush, duration);
+
+                Platform.runLater(() -> {
+                    SimulationBenchmark.ComparisonResult result;
+                    if (engine.isAiMode()) {
+                        result = new SimulationBenchmark.ComparisonResult(classicBaseline, historyCopy);
+                    } else {
+                        result = new SimulationBenchmark.ComparisonResult(historyCopy, new java.util.ArrayList<>());
+                    }
+                    showComparisonCharts(result);
+                });
+            } finally {
+                Platform.runLater(() -> {
+                    btnGraphs.setDisable(false);
+                    btnGraphs.setText("📊 Stats Session");
+                });
+            }
+        }, "traffic-session-stats");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void runFullBenchmark() {
+        animationController.getSimulationEngine().logAI("🧪 Lancement du Benchmark IA vs Classique...");
+        btnBenchmark.setDisable(true);
+        btnBenchmark.setText("Calcul...");
+
+        Thread worker = new Thread(() -> {
+            try {
+                SimulationBenchmark.ComparisonResult result = SimulationBenchmark.runDefault();
+                Platform.runLater(() -> {
+                    showComparisonCharts(result);
+                    animationController.getSimulationEngine().logAI("✅ Benchmark terminé.");
+                });
+            } finally {
+                Platform.runLater(() -> {
+                    btnBenchmark.setDisable(false);
+                    btnBenchmark.setText("🧪 Benchmark IA");
+                });
+            }
+        }, "traffic-full-benchmark");
         worker.setDaemon(true);
         worker.start();
     }
