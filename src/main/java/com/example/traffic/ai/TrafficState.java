@@ -53,6 +53,11 @@ public class TrafficState {
     private static final Deque<TrafficLevel> historyWE = new LinkedList<>();
     private static final Deque<TrafficLevel> historyNS = new LinkedList<>();
 
+    public static void resetHistory() {
+        historyWE.clear();
+        historyNS.clear();
+    }
+
     public TrafficState(TrafficLevel levelWestEast, TrafficLevel levelNorthSouth, 
                         Trend trendWestEast, Trend trendNorthSouth) {
         this.levelWestEast = levelWestEast;

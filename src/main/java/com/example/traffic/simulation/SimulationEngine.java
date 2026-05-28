@@ -27,7 +27,19 @@ public class SimulationEngine {
     private final List<Vehicle> vehicles = new ArrayList<>();
     private final List<Intersection> intersections = new ArrayList<>();
     private Graph graph;
-    private final Random random = new Random();
+    private final Random random;
+
+    public SimulationEngine() {
+        this(new Random());
+    }
+
+    public SimulationEngine(long seed) {
+        this(new Random(seed));
+    }
+
+    private SimulationEngine(Random random) {
+        this.random = random;
+    }
 
     // ── Mode IA ──
     private boolean aiMode = false;
@@ -237,7 +249,7 @@ public class SimulationEngine {
     public void setAiMode(boolean aiMode) {
         this.aiMode = aiMode;
         if (aiMode && agent == null) {
-            agent = new QLearningAgent();
+            agent = new QLearningAgent(random.nextLong());
         }
         for (Intersection intersection : intersections) {
             intersection.getTrafficLight().setAiControlled(aiMode);
@@ -878,6 +890,7 @@ public class SimulationEngine {
     private void cleanupVehicles() {
         vehicles.removeIf(v -> {
             if (v.isMarkedForRemoval()) {
+                vehiclesCompleted++;
                 if (v == activeEmergency) {
                     activeEmergency = null;
                     logAI("✅ Véhicule d'urgence a quitté l'intersection");
@@ -915,6 +928,7 @@ public class SimulationEngine {
         totalWaitEW = 0;
         waitingCountNS = 0;
         waitingCountEW = 0;
+        vehiclesCompleted = 0;
         spawnTimer = 0;
         vehicleIdCounter = 0;
         controllerPhase = 0;

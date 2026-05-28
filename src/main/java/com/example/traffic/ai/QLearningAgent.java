@@ -26,7 +26,7 @@ public class QLearningAgent {
     private double epsilonDecay = 0.999; // Décroissance de l'exploration
     private double epsilonMin = 0.05; // Exploration minimale
 
-    private final Random random = new Random();
+    private final Random random;
 
     // Statistiques
     private double totalReward = 0.0;
@@ -36,6 +36,18 @@ public class QLearningAgent {
     private String lastDecisionReason = "En attente...";
     private double lastConfidence = 0.0;
     private String lastAction = "KEEP";
+
+    public QLearningAgent() {
+        this(new Random());
+    }
+
+    public QLearningAgent(long seed) {
+        this(new Random(seed));
+    }
+
+    private QLearningAgent(Random random) {
+        this.random = random;
+    }
 
     /**
      * Choisit une action avec la stratégie epsilon-greedy.

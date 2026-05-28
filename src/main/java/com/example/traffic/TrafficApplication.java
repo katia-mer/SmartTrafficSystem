@@ -2,14 +2,19 @@ package com.example.traffic;
 
 import com.example.traffic.ai.QLearningAgent;
 import com.example.traffic.model.TrafficLight;
+import com.example.traffic.simulation.SimulationBenchmark;
 import com.example.traffic.simulation.SimulationEngine;
 import com.example.traffic.ui.AnimationController3D;
 import com.example.traffic.ui.CityEnvironment;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.*;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -45,6 +50,7 @@ public class TrafficApplication extends Application {
     private HBox emergencyAlert;
     private Button btnLow, btnMed, btnHigh;
     private Button btnRain, btnNight, btnRush;
+    private Button btnGraphs;
 
     // FPS
     private int frameCount = 0;
@@ -223,13 +229,16 @@ public class TrafficApplication extends Application {
         waitNSLabel = statValue("0.0s");
         waitEWLabel = statValue("0.0s");
 
-        GridPane stats = new GridPane();
-        stats.setHgap(10);
-        stats.setVgap(10);
-        stats.add(statBox(fpsLabel, "FPS"), 0, 0);
-        stats.add(statBox(carsLabel, "VÉHICULES ACTIFS"), 1, 0);
-        stats.add(statBox(waitNSLabel, "ATTENTE MOY. (N/S)"), 0, 1);
-        stats.add(statBox(waitEWLabel, "ATTENTE MOY. (E/O)"), 1, 1);
+        VBox carsBox = statBox(carsLabel, "VÉHICULES ACTIFS");
+        carsBox.setPrefWidth(230);
+        carsBox.setAlignment(Pos.CENTER);
+
+        HBox waitBox = new HBox(10, 
+                statBox(waitNSLabel, "ATTENTE MOY. (N/S)"),
+                statBox(waitEWLabel, "ATTENTE MOY. (E/O)")
+        );
+
+        VBox stats = new VBox(10, carsBox, waitBox);
 
         HBox lightsRow = new HBox(12);
         lightsRow.setAlignment(Pos.CENTER_LEFT);
@@ -295,7 +304,10 @@ public class TrafficApplication extends Application {
         btnNight = makeScenarioBtn("🌙 Nuit", "#4c1d95", "#2e1065");
         btnNight.setOnAction(e -> toggleNight());
 
-        HBox scenariosRow = new HBox(15, emergencyBtn, btnRush, btnRain, btnNight, resetBtn);
+        btnGraphs = makeScenarioBtn("📊 Graphes", "#0f766e", "#115e59");
+        btnGraphs.setOnAction(e -> runComparisonGraphs());
+
+        HBox scenariosRow = new HBox(15, emergencyBtn, btnRush, btnRain, btnNight, resetBtn, btnGraphs);
         scenariosRow.setAlignment(Pos.CENTER);
 
         VBox scenariosContainer = new VBox(12, scenariosRow);
@@ -398,6 +410,78 @@ public class TrafficApplication extends Application {
         aiLogBox.getChildren().clear();
         aiReasonLabel.setText("Simulation réinitialisée...");
         aiDecisionLabel.setText("En attente...");
+    }
+
+    private void runComparisonGraphs() {
+        btnGraphs.setDisable(true);
+        btnGraphs.setText("Calcul...");
+
+        Thread worker = new Thread(() -> {
+            SimulationBenchmark.ComparisonResult result = SimulationBenchmark.runDefault();
+            Platform.runLater(() -> {
+                showComparisonCharts(result);
+                btnGraphs.setText("📊 Graphes");
+                btnGraphs.setDisable(false);
+            });
+        }, "traffic-comparison-graphs");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void showComparisonCharts(SimulationBenchmark.ComparisonResult result) {
+        LineChart<Number, Number> waitChart = createLineChart(
+                "Evolution du temps d'attente moyen",
+                "Temps de simulation (s)",
+                "Attente moyenne (s)"
+        );
+        addSeries(waitChart, "Systeme classique", result.classic, true);
+        addSeries(waitChart, "Systeme avec IA", result.ai, true);
+
+        LineChart<Number, Number> throughputChart = createLineChart(
+                "Evolution des vehicules traites",
+                "Temps de simulation (s)",
+                "Vehicules sortis"
+        );
+        addSeries(throughputChart, "Systeme classique", result.classic, false);
+        addSeries(throughputChart, "Systeme avec IA", result.ai, false);
+
+        HBox charts = new HBox(16, waitChart, throughputChart);
+        charts.setPadding(new Insets(16));
+        charts.setStyle("-fx-background-color: #0f172a;");
+        HBox.setHgrow(waitChart, Priority.ALWAYS);
+        HBox.setHgrow(throughputChart, Priority.ALWAYS);
+
+        Stage stage = new Stage();
+        stage.setTitle("Graphes comparatifs - Classique vs IA");
+        stage.setScene(new Scene(charts, 1100, 520));
+        stage.show();
+    }
+
+    private LineChart<Number, Number> createLineChart(String title, String xLabel, String yLabel) {
+        NumberAxis xAxis = new NumberAxis();
+        NumberAxis yAxis = new NumberAxis();
+        xAxis.setLabel(xLabel);
+        yAxis.setLabel(yLabel);
+
+        LineChart<Number, Number> chart = new LineChart<>(xAxis, yAxis);
+        chart.setTitle(title);
+        chart.setAnimated(false);
+        chart.setCreateSymbols(false);
+        chart.setLegendVisible(true);
+        chart.setMinWidth(520);
+        return chart;
+    }
+
+    private void addSeries(LineChart<Number, Number> chart, String name,
+                           java.util.List<SimulationBenchmark.DataPoint> points,
+                           boolean waitMetric) {
+        XYChart.Series<Number, Number> series = new XYChart.Series<>();
+        series.setName(name);
+        for (SimulationBenchmark.DataPoint point : points) {
+            double value = waitMetric ? point.averageWaitSeconds : point.completedVehicles;
+            series.getData().add(new XYChart.Data<>(point.timeSeconds, value));
+        }
+        chart.getData().add(series);
     }
 
     // ═══ UI UPDATE (each frame) ═══
