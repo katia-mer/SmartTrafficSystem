@@ -210,13 +210,13 @@ public class SimulationEngine {
     public void setRainMode(boolean rain) {
         this.rainMode = rain;
         updateAllVehicleSpeeds();
-        logAI(rain ? "🌧️ Mode Pluie — Vitesse réduite & Orange allongé" : "☀️ Mode Pluie désactivé");
+        logAI(rain ? "Mode Pluie - Vitesse reduite et Orange allonge" : "Mode Pluie desactive");
     }
 
     public void setNightMode(boolean night) {
         this.nightMode = night;
         updateAllVehicleSpeeds();
-        logAI(night ? "🌙 Mode Nuit — Cycles de feux courts" : "Mode Jour restauré");
+        logAI(night ? "Mode Nuit - Cycles de feux courts" : "Mode Jour restaure");
     }
 
     private void updateAllVehicleSpeeds() {
@@ -239,7 +239,7 @@ public class SimulationEngine {
     public void setRushHour(boolean rush) {
         this.rushHour = rush;
         this.maxCars = rush ? 60 : 40;
-        logAI(rush ? "🚗🚗🚗 Heure de Pointe — Trafic dense!" : "🚗 Trafic normal restauré");
+        logAI(rush ? "Heure de Pointe - Trafic dense!" : "Trafic normal restaure");
     }
 
     // ══════════════════════════════════════════════════════
@@ -254,7 +254,7 @@ public class SimulationEngine {
         for (Intersection intersection : intersections) {
             intersection.getTrafficLight().setAiControlled(aiMode);
         }
-        logAI(aiMode ? "🤖 IA Q-Learning activée" : "⭕ IA désactivée — Timer classique");
+        logAI(aiMode ? "IA Q-Learning activee" : "IA desactivee - Timer classique");
     }
 
     public boolean isAiMode() {
@@ -415,7 +415,7 @@ public class SimulationEngine {
         controllerPhase = 0;
         controllerTimer = 20.0;
         applyControllerToLights();
-        logAI("🚨 URGENCE: Vert forcé N/S");
+        logAI("URGENCE: Vert force N/S");
     }
 
     /** Force le vert E/O (urgence) */
@@ -425,7 +425,7 @@ public class SimulationEngine {
         controllerPhase = 4;
         controllerTimer = 20.0;
         applyControllerToLights();
-        logAI("🚨 URGENCE: Vert forcé E/O");
+        logAI("URGENCE: Vert force E/O");
     }
 
     /** Appelé par l'IA pour forcer une phase */
@@ -515,7 +515,7 @@ public class SimulationEngine {
         v.setSpeedModifier(calculateTotalModifier());
 
         vehicles.add(v);
-        logAI("➕ Nouveau " + type + " lancé (" + entryId + ")");
+        logAI("Nouveau " + type + " lance (" + entryId + ")");
     }
 
     /** Spawn un véhicule d'urgence sur une direction aléatoire */
@@ -557,7 +557,7 @@ public class SimulationEngine {
         else
             forceGreenEW();
 
-        logAI("🚨 ALERTE: " + emLabel + " lancé! Direction " + entryId);
+        logAI("ALERTE: " + emLabel + " lance! Direction " + entryId);
         return em;
     }
 
@@ -912,7 +912,7 @@ public class SimulationEngine {
                 vehiclesCompleted++;
                 if (v == activeEmergency) {
                     activeEmergency = null;
-                    logAI("✅ Véhicule d'urgence a quitté l'intersection");
+                    logAI("Vehicule d'urgence a quitte l'intersection");
                 }
                 return true;
             }
@@ -960,6 +960,6 @@ public class SimulationEngine {
         aiLog.clear();
         if (agent != null)
             agent.reset();
-        logAI("↻ Simulation réinitialisée");
+        logAI("Simulation réinitialisée");
     }
 }

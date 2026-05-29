@@ -15,10 +15,7 @@ import javafx.scene.*;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Slider;
+import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -52,7 +49,7 @@ public class TrafficApplication extends Application {
     private HBox emergencyAlert;
     private Button btnLow, btnMed, btnHigh;
     private Button btnRain, btnNight, btnRush;
-    private Button btnGraphs, btnBenchmark;
+    private Button btnGraphs;
 
     // FPS
     private int frameCount = 0;
@@ -201,8 +198,11 @@ public class TrafficApplication extends Application {
 
         Button startBtn = makeBtn("▶ Start", "#22c55e");
         Button pauseBtn = makeBtn("⏸ Pause", "#f59e0b");
+        Button resetBtn = makeBtn("↻ Reset", "#475569");
+        
         startBtn.setOnAction(e -> running = true);
         pauseBtn.setOnAction(e -> running = false);
+        resetBtn.setOnAction(e -> resetSimulation());
 
         speedSlider = new Slider(0.5, 5.0, 0.7);
         speedSlider.setPrefWidth(120);
@@ -210,7 +210,7 @@ public class TrafficApplication extends Application {
         speedSlider.setFocusTraversable(false);
         speedSlider.setStyle("-fx-control-inner-background: #1e293b;");
 
-        HBox controlBtns = new HBox(12, startBtn, pauseBtn, speedSlider);
+        HBox controlBtns = new HBox(12, startBtn, pauseBtn, resetBtn, speedSlider);
         controlBtns.setAlignment(Pos.CENTER_LEFT);
         controlsGroup.getChildren().addAll(controlsLabel, controlBtns);
         HBox controlsPanel = wrapPanel(controlsGroup);
@@ -288,45 +288,59 @@ public class TrafficApplication extends Application {
 
     // ═══ BOTTOM BAR (Scenario Buttons) ═══
     private HBox createBottomBar() {
-        // Scénarios d'urgence
-        Button emergencyBtn = makeScenarioBtn("🚨 Urgence", "#ef4444", "#dc2626");
-        emergencyBtn.setOnAction(e -> triggerEmergency());
+        // --- GROUPE ENVIRONNEMENT ---
+        Label envLbl = new Label("ENVIRONNEMENT");
+        envLbl.setFont(Font.font("System", FontWeight.BOLD, 9));
+        envLbl.setTextFill(Color.rgb(148, 163, 184));
 
-        // Scénarios environnement
-        btnRush = makeScenarioBtn("🚗 Heure de Pointe", "#854d0e", "#713f12");
+        btnRush = makeScenarioBtn("Heure de Pointe", "#854d0e", "#713f12");
         btnRush.setOnAction(e -> toggleRushHour());
-
-        Button resetBtn = makeScenarioBtn("↻ Reset", "#475569", "#334155");
-        resetBtn.setOnAction(e -> resetSimulation());
-
-        // Météo / Temps
-        btnRain = makeScenarioBtn("🌧️ Pluie", "#334155", "#1e293b");
+        btnRain = makeScenarioBtn("Pluie", "#334155", "#1e293b");
         btnRain.setOnAction(e -> toggleRain());
-
-        btnNight = makeScenarioBtn("🌙 Nuit", "#4c1d95", "#2e1065");
+        btnNight = makeScenarioBtn("Nuit", "#4c1d95", "#2e1065");
         btnNight.setOnAction(e -> toggleNight());
 
-        btnGraphs = makeScenarioBtn("📊 Stats Session", "#0f766e", "#115e59");
+        HBox envBox = new HBox(10, btnRush, btnRain, btnNight);
+        VBox envContainer = new VBox(5, envLbl, envBox);
+        envContainer.setAlignment(Pos.CENTER);
+
+        // --- GROUPE ACTIONS ---
+        Label actLbl = new Label("SITUATIONS");
+        actLbl.setFont(Font.font("System", FontWeight.BOLD, 9));
+        actLbl.setTextFill(Color.rgb(148, 163, 184));
+
+        Button emergencyBtn = makeScenarioBtn("Urgence", "#ef4444", "#dc2626");
+        emergencyBtn.setOnAction(e -> triggerEmergency());
+
+        HBox actBox = new HBox(10, emergencyBtn);
+        VBox actContainer = new VBox(5, actLbl, actBox);
+        actContainer.setAlignment(Pos.CENTER);
+
+        // --- GROUPE ANALYSE ---
+        Label anaLbl = new Label("ANALYSE PERFORMANCE");
+        anaLbl.setFont(Font.font("System", FontWeight.BOLD, 9));
+        anaLbl.setTextFill(Color.rgb(148, 163, 184));
+
+        btnGraphs = makeScenarioBtn("Stats Session", "#0f766e", "#115e59");
         btnGraphs.setOnAction(e -> runComparisonGraphs());
 
-        btnBenchmark = makeScenarioBtn("🧪 Benchmark IA", "#7c3aed", "#5b21b6");
-        btnBenchmark.setOnAction(e -> runFullBenchmark());
+        VBox anaContainer = new VBox(5, anaLbl, btnGraphs);
+        anaContainer.setAlignment(Pos.CENTER);
 
-        HBox scenariosRow = new HBox(15, emergencyBtn, btnRush, btnRain, btnNight, resetBtn, btnGraphs, btnBenchmark);
-        scenariosRow.setAlignment(Pos.CENTER);
+        HBox mainRow = new HBox(40, envContainer, actContainer, anaContainer);
+        mainRow.setAlignment(Pos.CENTER);
+        mainRow.setPadding(new Insets(15, 30, 15, 30));
+        mainRow.setStyle("-fx-background-color: rgba(15, 23, 42, 0.9); -fx-background-radius: 20; -fx-border-color: rgba(255,255,255,0.1); -fx-border-radius: 20;");
 
-        VBox scenariosContainer = new VBox(12, scenariosRow);
-        scenariosContainer.setAlignment(Pos.CENTER);
-        scenariosContainer.setPadding(new Insets(20));
-
-        HBox bar = new HBox(scenariosContainer);
+        HBox bar = new HBox(mainRow);
         bar.setAlignment(Pos.CENTER);
+        bar.setPadding(new Insets(0, 0, 20, 0));
         return bar;
     }
 
     // ═══ EMERGENCY ALERT ═══
     private HBox createEmergencyAlert() {
-        emergencyLabel = new Label("\uD83D\uDEA8 Véhicule d'urgence en approche!");
+        emergencyLabel = new Label("Vehicule d'urgence en approche!");
         emergencyLabel.setTextFill(Color.WHITE);
         emergencyLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
         HBox alert = new HBox(8, emergencyLabel);
@@ -426,8 +440,10 @@ public class TrafficApplication extends Application {
             return;
         }
 
-        btnGraphs.setDisable(true);
-        btnGraphs.setText("Calcul...");
+        if (btnGraphs != null) {
+            btnGraphs.setDisable(true);
+            btnGraphs.setText("Calcul...");
+        }
 
         Thread worker = new Thread(() -> {
             try {
@@ -451,34 +467,13 @@ public class TrafficApplication extends Application {
                 });
             } finally {
                 Platform.runLater(() -> {
-                    btnGraphs.setDisable(false);
-                    btnGraphs.setText("📊 Stats Session");
+                    if (btnGraphs != null) {
+                        btnGraphs.setDisable(false);
+                        btnGraphs.setText("📊 Stats Session");
+                    }
                 });
             }
         }, "traffic-session-stats");
-        worker.setDaemon(true);
-        worker.start();
-    }
-
-    private void runFullBenchmark() {
-        animationController.getSimulationEngine().logAI("🧪 Lancement du Benchmark IA vs Classique...");
-        btnBenchmark.setDisable(true);
-        btnBenchmark.setText("Calcul...");
-
-        Thread worker = new Thread(() -> {
-            try {
-                SimulationBenchmark.ComparisonResult result = SimulationBenchmark.runDefault();
-                Platform.runLater(() -> {
-                    showComparisonCharts(result);
-                    animationController.getSimulationEngine().logAI("✅ Benchmark terminé.");
-                });
-            } finally {
-                Platform.runLater(() -> {
-                    btnBenchmark.setDisable(false);
-                    btnBenchmark.setText("🧪 Benchmark IA");
-                });
-            }
-        }, "traffic-full-benchmark");
         worker.setDaemon(true);
         worker.start();
     }
@@ -577,7 +572,7 @@ public class TrafficApplication extends Application {
             aiLogBox.getChildren().clear();
             for (String entry : log) {
                 Label l = new Label(entry);
-                l.setTextFill(entry.contains("🚨") ? Color.rgb(239, 68, 68) : Color.rgb(148, 163, 184));
+                l.setTextFill((entry.contains("URGENCE") || entry.contains("ALERTE")) ? Color.rgb(239, 68, 68) : Color.rgb(148, 163, 184));
                 l.setFont(Font.font(9));
                 l.setWrapText(true);
                 aiLogBox.getChildren().add(l);

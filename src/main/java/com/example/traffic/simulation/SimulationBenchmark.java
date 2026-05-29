@@ -102,40 +102,40 @@ public class SimulationBenchmark {
         Node nX = n(graph, "NX", 40, -1500);
         Node sX = n(graph, "SX", -40, 1500);
 
-        Node cWS = n(graph, "CWS", -40, 40);
-        Node cEN = n(graph, "CEN", 40, -40);
-        Node cNW = n(graph, "CNW", -40, -40);
-        Node cSE = n(graph, "CSE", 40, 40);
-        Node cWN = n(graph, "CWN", 40, 40);
-        Node cES = n(graph, "CES", -40, -40);
+        Node cWS = n(graph, "CWS", -40, 40);  // W -> S (Droite)
+        Node cWN = n(graph, "CWN", 40, 40);   // W -> N (Gauche)
+        
+        Node cEN = n(graph, "CEN", 40, -40);  // E -> N (Droite)
+        Node cES = n(graph, "CES", -40, -40); // E -> S (Gauche)
+        
+        Node cNW = n(graph, "CNW", -40, -40); // N -> W (Droite)
+        Node cNE = n(graph, "CNE", -40, 40);  // N -> E (Gauche)
+        
+        Node cSE = n(graph, "CSE", 40, 40);   // S -> E (Droite)
+        Node cSW = n(graph, "CSW", 40, -40);  // S -> W (Gauche)
 
         e(graph, wE, wS);
         e(graph, eE, eS);
         e(graph, nE, nS);
         e(graph, sE, sS);
 
+        // 1. TOUT DROIT (Index 0)
         e(graph, wS, eX);
         e(graph, eS, wX);
         e(graph, nS, sX);
         e(graph, sS, nX);
 
-        e(graph, wS, cWS);
-        e(graph, cWS, sX);
-        e(graph, eS, cEN);
-        e(graph, cEN, nX);
-        e(graph, nS, cNW);
-        e(graph, cNW, wX);
-        e(graph, sS, cSE);
-        e(graph, cSE, eX);
+        // 2. VIRAGES À DROITE (Index 1)
+        e(graph, wS, cWS); e(graph, cWS, sX);
+        e(graph, eS, cEN); e(graph, cEN, nX);
+        e(graph, nS, cNW); e(graph, cNW, wX);
+        e(graph, sS, cSE); e(graph, cSE, eX);
 
-        e(graph, wS, cWN);
-        e(graph, cWN, nX);
-        e(graph, eS, cES);
-        e(graph, cES, sX);
-        e(graph, nS, cWS);
-        e(graph, cWS, eX);
-        e(graph, sS, cEN);
-        e(graph, cEN, wX);
+        // 3. VIRAGES À GAUCHE (Index 2)
+        e(graph, wS, cWN); e(graph, cWN, nX);
+        e(graph, eS, cES); e(graph, cES, sX);
+        e(graph, nS, cNE); e(graph, cNE, eX);
+        e(graph, sS, cSW); e(graph, cSW, wX);
 
         engine.addEntryNodeId("WE");
         engine.addEntryNodeId("EE");

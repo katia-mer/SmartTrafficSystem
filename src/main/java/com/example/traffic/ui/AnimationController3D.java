@@ -73,16 +73,18 @@ public class AnimationController3D {
         Node nX = n(graph, "NX", 40, -1500);
         Node sX = n(graph, "SX", -40, 1500);
 
-        // Coins de virage (dans l'intersection)
-        Node cWS = n(graph, "CWS", -40, 40);
-        Node cEN = n(graph, "CEN", 40, -40);
-        Node cNW = n(graph, "CNW", -40, -40);
-        Node cSE = n(graph, "CSE", 40, 40);
+        // Coins de virage (dans l'intersection) - 8 coins distincts pour éviter les conflits de routes
+        Node cWS = n(graph, "CWS", -40, 40);  // W -> S (Droite)
+        Node cWN = n(graph, "CWN", 40, 40);   // W -> N (Gauche)
         
-        Node cWN = n(graph, "CWN", 40, 40);
-        Node cES = n(graph, "CES", -40, -40);
-        Node cNE = n(graph, "CNE", 40, -40);
-        Node cSW = n(graph, "CSW", -40, 40);
+        Node cEN = n(graph, "CEN", 40, -40);  // E -> N (Droite)
+        Node cES = n(graph, "CES", -40, -40); // E -> S (Gauche)
+        
+        Node cNW = n(graph, "CNW", -40, -40); // N -> W (Droite)
+        Node cNE = n(graph, "CNE", -40, 40);  // N -> E (Gauche)
+        
+        Node cSE = n(graph, "CSE", 40, 40);   // S -> E (Droite)
+        Node cSW = n(graph, "CSW", 40, -40);  // S -> W (Gauche)
 
         // ══ ROUTES (Edges) ══
         // Approches
@@ -91,23 +93,23 @@ public class AnimationController3D {
         e(graph, nE, nS);
         e(graph, sE, sS);
 
-        // Tout droit
+        // 1. TOUT DROIT (Index 0 pour chaque nœud Stop)
         e(graph, wS, eX);
         e(graph, eS, wX);
         e(graph, nS, sX);
         e(graph, sS, nX);
 
-        // Virage à droite
+        // 2. VIRAGES À DROITE (Index 1 pour chaque nœud Stop)
         e(graph, wS, cWS); e(graph, cWS, sX);   // W→S
         e(graph, eS, cEN); e(graph, cEN, nX);    // E→N
         e(graph, nS, cNW); e(graph, cNW, wX);    // N→W
         e(graph, sS, cSE); e(graph, cSE, eX);    // S→E
 
-        // Virage à gauche
+        // 3. VIRAGES À GAUCHE (Index 2 pour chaque nœud Stop)
         e(graph, wS, cWN); e(graph, cWN, nX);    // W→N
         e(graph, eS, cES); e(graph, cES, sX);    // E→S
-        e(graph, nS, cWS); e(graph, cWS, eX);    // N→E (Correction: trajet orthogonal via -40, 40)
-        e(graph, sS, cEN); e(graph, cEN, wX);    // S→W (Correction: trajet orthogonal via 40, -40)
+        e(graph, nS, cNE); e(graph, cNE, eX);    // N→E
+        e(graph, sS, cSW); e(graph, cSW, wX);    // S→W
 
         // ══ Enregistrer les nœuds d'entrée pour le spawn ══
         simulationEngine.addEntryNodeId("WE");
